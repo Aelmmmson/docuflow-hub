@@ -1,16 +1,103 @@
 import { FileText, FileCheck, FileX, FileClock } from "lucide-react";
-import { SummaryCard } from "@/components/dashboard/SummaryCard";
+import { FolderCard } from "@/components/dashboard/FolderCard";
 import { RecentDocuments } from "@/components/dashboard/RecentDocuments";
 import { ExpensesChart } from "@/components/dashboard/ExpensesChart";
 import { CategoriesChart } from "@/components/dashboard/CategoriesChart";
+import { DashboardSkeleton } from "@/components/skeletons/DashboardSkeleton";
 import { useEffect, useState } from "react";
 
 const user = {
   name: "John",
 };
 
+const cardData = [
+  {
+    id: 1,
+    count: 128,
+    label: "File(s)",
+    title: "Generated",
+    color: {
+      tab: "from-blue-300 to-blue-300",
+      body: "bg-gradient-to-t from-blue-50 to-white dark:from-blue-950/50 dark:to-card",
+      layer1: "bg-blue-50 dark:bg-blue-900/30",
+      layer2: "bg-blue-200 dark:bg-blue-800/40",
+    },
+    iconColor: "#60A5FA",
+    icon: <FileText className="w-full h-full" />,
+    backgroundIcon: (
+      <svg className="w-52 h-52 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+      </svg>
+    ),
+  },
+  {
+    id: 2,
+    count: 94,
+    label: "Doc(s)",
+    title: "Approved",
+    color: {
+      tab: "from-emerald-300 to-emerald-300",
+      body: "bg-gradient-to-t from-emerald-50 to-white dark:from-emerald-950/50 dark:to-card",
+      layer1: "bg-emerald-50 dark:bg-emerald-900/30",
+      layer2: "bg-emerald-200 dark:bg-emerald-800/40",
+    },
+    iconColor: "#34D399",
+    icon: <FileCheck className="w-full h-full" />,
+    backgroundIcon: (
+      <svg className="w-52 h-52 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+      </svg>
+    ),
+  },
+  {
+    id: 3,
+    count: 22,
+    label: "Sheet(s)",
+    title: "Unapproved",
+    color: {
+      tab: "from-amber-300 to-amber-300",
+      body: "bg-gradient-to-t from-amber-50 to-white dark:from-amber-950/50 dark:to-card",
+      layer1: "bg-amber-50 dark:bg-amber-900/30",
+      layer2: "bg-amber-200 dark:bg-amber-800/40",
+    },
+    iconColor: "#FBBF24",
+    icon: <FileClock className="w-full h-full" />,
+    backgroundIcon: (
+      <svg className="w-52 h-52 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+      </svg>
+    ),
+  },
+  {
+    id: 4,
+    count: 12,
+    label: "Report(s)",
+    title: "Rejected",
+    color: {
+      tab: "from-red-300 to-red-300",
+      body: "bg-gradient-to-t from-red-50 to-white dark:from-red-950/50 dark:to-card",
+      layer1: "bg-red-50 dark:bg-red-900/30",
+      layer2: "bg-red-200 dark:bg-red-800/40",
+    },
+    iconColor: "#F87171",
+    icon: <FileX className="w-full h-full" />,
+    backgroundIcon: (
+      <svg className="w-52 h-52 text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M6 18L18 6M6 6l12 12"></path>
+      </svg>
+    ),
+  },
+];
+
 export default function Dashboard() {
+  const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    // Simulate loading
+    const loadTimer = setTimeout(() => setIsLoading(false), 1200);
+    return () => clearTimeout(loadTimer);
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -34,6 +121,10 @@ export default function Dashboard() {
     });
   };
 
+  if (isLoading) {
+    return <DashboardSkeleton />;
+  }
+
   return (
     <div className="p-4 lg:p-6 pt-14 lg:pt-6">
       {/* Header */}
@@ -53,35 +144,21 @@ export default function Dashboard() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <SummaryCard
-          title="Generated"
-          count={156}
-          icon={<FileText className="h-5 w-5" />}
-          variant="default"
-          delay={0}
-        />
-        <SummaryCard
-          title="Approved"
-          count={89}
-          icon={<FileCheck className="h-5 w-5" />}
-          variant="success"
-          delay={50}
-        />
-        <SummaryCard
-          title="Unapproved"
-          count={42}
-          icon={<FileClock className="h-5 w-5" />}
-          variant="warning"
-          delay={100}
-        />
-        <SummaryCard
-          title="Rejected"
-          count={25}
-          icon={<FileX className="h-5 w-5" />}
-          variant="destructive"
-          delay={150}
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        {cardData.map((card, index) => (
+          <div key={card.id} className="group flex flex-col items-center justify-center">
+            <FolderCard
+              count={card.count}
+              label={card.label}
+              title={card.title}
+              color={card.color}
+              iconColor={card.iconColor}
+              icon={card.icon}
+              backgroundIcon={card.backgroundIcon}
+              delay={index * 100}
+            />
+          </div>
+        ))}
       </div>
 
       {/* Charts and Recent Section */}

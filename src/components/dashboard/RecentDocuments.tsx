@@ -12,8 +12,6 @@ const documents: Document[] = [
   { id: "1", title: "Newspaper Expense", reference: "EXP-2024-0012", status: "Submitted" },
   { id: "2", title: "Electric Expenses", reference: "EXP-2024-0011", status: "Paid" },
   { id: "3", title: "Office Supplies", reference: "EXP-2024-0010", status: "Approved" },
-  { id: "4", title: "Travel Reimbursement", reference: "EXP-2024-0009", status: "Pending" },
-  { id: "5", title: "Software License", reference: "EXP-2024-0008", status: "Approved" },
 ];
 
 const statusStyles: Record<Document["status"], string> = {

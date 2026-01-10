@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, FileInput, Settings, FileText, Menu, X } from "lucide-react";
+import { LayoutDashboard, FileInput, Settings, FileText, Menu, X, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,6 @@ import { useState } from "react";
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Document Capture", href: "/document-capture", icon: FileInput },
-  { name: "Settings", href: "/settings", icon: Settings },
 ];
 
 const user = {
@@ -80,6 +79,21 @@ export function AppSidebar() {
 
         {/* Footer */}
         <div className="border-t border-sidebar-border p-3">
+          {/* Settings Link */}
+          <NavLink
+            to="/settings"
+            onClick={() => setIsMobileOpen(false)}
+            className={cn(
+              "flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-colors mb-3",
+              location.pathname === "/settings"
+                ? "bg-sidebar-accent text-sidebar-primary"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            )}
+          >
+            <Settings className="h-4 w-4 flex-shrink-0" />
+            Settings
+          </NavLink>
+
           <div className="flex items-center justify-between mb-3">
             <span className="text-2xs font-medium text-sidebar-foreground/50 uppercase tracking-wider">
               Theme
@@ -98,6 +112,12 @@ export function AppSidebar() {
                 {user.email}
               </p>
             </div>
+            <button 
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
+              title="Logout"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
         </div>
       </aside>
