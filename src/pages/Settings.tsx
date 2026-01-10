@@ -1,4 +1,6 @@
+import { useState, useEffect } from "react";
 import { Settings as SettingsIcon, User, Bell, Shield, Palette } from "lucide-react";
+import { SettingsSkeleton } from "@/components/skeletons/SettingsSkeleton";
 
 const settingsSections = [
   { name: "Profile", description: "Manage your account details", icon: User },
@@ -8,6 +10,17 @@ const settingsSections = [
 ];
 
 export default function Settings() {
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (isLoading) {
+    return <SettingsSkeleton />;
+  }
+
   return (
     <div className="p-4 lg:p-6 pt-14 lg:pt-6">
       {/* Header */}

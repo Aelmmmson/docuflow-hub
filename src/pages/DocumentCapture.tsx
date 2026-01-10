@@ -1,12 +1,23 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DocumentForm } from "@/components/capture/DocumentForm";
 import { QuickTemplates } from "@/components/capture/QuickTemplates";
 import { RecentUploads } from "@/components/capture/RecentUploads";
+import { DocumentCaptureSkeleton } from "@/components/skeletons/DocumentCaptureSkeleton";
 import { FileText, Search } from "lucide-react";
 
 export default function DocumentCapture() {
   const [activeTab, setActiveTab] = useState("request");
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (isLoading) {
+    return <DocumentCaptureSkeleton />;
+  }
 
   return (
     <div className="p-4 lg:p-6 pt-14 lg:pt-6">
