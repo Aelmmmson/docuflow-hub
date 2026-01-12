@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { MainLayout } from "@/components/layout/MainLayout";
 import Index from "./pages/Index";
 import DocumentCapture from "./pages/DocumentCapture";
+import Approval from "./pages/Approval";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -23,6 +24,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/document-capture" element={<DocumentCapture />} />
+              <Route path="/approval" element={<Approval />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
