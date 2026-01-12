@@ -4,6 +4,7 @@ import { RecentDocuments } from "@/components/dashboard/RecentDocuments";
 import { ExpensesChart } from "@/components/dashboard/ExpensesChart";
 import { CategoriesChart } from "@/components/dashboard/CategoriesChart";
 import { DashboardSkeleton } from "@/components/skeletons/DashboardSkeleton";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useEffect, useState } from "react";
 
 const user = {
@@ -137,9 +138,12 @@ export default function Dashboard() {
             Manage your documents efficiently
           </p>
         </div>
-        <div className="text-right animate-fade-in" style={{ animationDelay: "100ms" }}>
-          <p className="text-xs font-medium text-foreground">{formatDate(currentTime)}</p>
-          <p className="text-xs text-muted-foreground font-mono">{formatTime(currentTime)}</p>
+        <div className="flex items-center gap-3 animate-fade-in" style={{ animationDelay: "100ms" }}>
+          <div className="text-right">
+            <p className="text-xs font-medium text-foreground">{formatDate(currentTime)}</p>
+            <p className="text-xs text-muted-foreground font-mono">{formatTime(currentTime)}</p>
+          </div>
+          <ThemeToggle />
         </div>
       </div>
 
