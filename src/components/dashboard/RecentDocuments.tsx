@@ -25,7 +25,7 @@ const statusStyles: Record<Document["status"], string> = {
 export function RecentDocuments() {
   return (
     <div className="rounded-xl bg-card p-4 shadow-card-md animate-fade-in" style={{ animationDelay: "200ms" }}>
-      <h3 className="text-xs font-semibold text-card-foreground mb-3">Recent Documents</h3>
+      <h3 className="text-base font-bold text-card-foreground mb-7">Recent Documents</h3>
       <div className="space-y-2">
         {documents.map((doc, index) => (
           <div

@@ -9,7 +9,7 @@ const pendingDocuments = [
     id: 1,
     title: "Invoice #2024-001",
     type: "Invoice",
-    submittedBy: "John Anderson",
+    submittedBy: "Henry Amoh",
     submittedAt: "2024-01-15",
     amount: "$2,450.00",
   },

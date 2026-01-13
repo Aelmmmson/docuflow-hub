@@ -57,7 +57,7 @@ export function FolderCard({ count, label, title, color, iconColor, backgroundIc
 
   return (
     <div 
-      className="file relative w-full max-w-[240px] h-40 cursor-pointer origin-bottom [perspective:1500px] z-40 animate-fade-in"
+      className="file relative w-full max-w-[240px] h-40 cursor-pointer origin-bottom [perspective:1500px] animate-fade-in"
       style={{ animationDelay: `${delay}ms` }}
     >
       {/* Folder tab */}
@@ -74,7 +74,7 @@ export function FolderCard({ count, label, title, color, iconColor, backgroundIc
         after:absolute after:content-[''] after:bottom-[99%] after:right-0 after:w-[146px] after:h-[16px] after:bg-card after:rounded-t-2xl 
         before:absolute before:content-[''] before:-top-[10px] before:right-[142px] before:size-3 before:bg-card before:[clip-path:polygon(100%_14%,50%_100%,100%_100%)] 
         transition-all ease duration-300 origin-bottom flex items-end 
-        group-hover:shadow-[inset_0_15px_30px_rgba(255,255,255,.8),_inset_0_-15px_30px_rgba(30,58,138,.8)] 
+        group-hover:shadow-[inset_0_15px_30px_rgba(255,255,255,.1),_inset_0_-15px_30px_rgba(30,58,138,.2)] 
         group-hover:[transform:rotateX(-35deg)_translateY(1px)]`}>
         
         {/* Background faint icon positioned to the right */}

@@ -23,8 +23,8 @@ const navigation = [
 ];
 
 const user = {
-  name: "John Anderson",
-  email: "john@company.com",
+  name: "Henry Amoh",
+  email: "henry@unionsg.com",
 };
 
 export function AppSidebar() {
@@ -62,7 +62,7 @@ export function AppSidebar() {
       >
         {/* Logo with Menu Toggle */}
         <div className="p-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 pt-3">
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
               className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center shadow-lg hover:shadow-xl transition-shadow flex-shrink-0"

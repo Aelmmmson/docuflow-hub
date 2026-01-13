@@ -34,7 +34,7 @@ const cardData = [
   {
     id: 2,
     count: 94,
-    label: "Doc(s)",
+    label: "File(s)",
     title: "Approved",
     color: {
       tab: "from-emerald-300 to-emerald-300",
@@ -53,7 +53,7 @@ const cardData = [
   {
     id: 3,
     count: 22,
-    label: "Sheet(s)",
+    label: "File(s)",
     title: "Unapproved",
     color: {
       tab: "from-amber-300 to-amber-300",
@@ -72,7 +72,7 @@ const cardData = [
   {
     id: 4,
     count: 12,
-    label: "Report(s)",
+    label: "File(s)",
     title: "Rejected",
     color: {
       tab: "from-red-300 to-red-300",
