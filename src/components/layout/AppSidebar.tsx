@@ -52,10 +52,10 @@ export function AppSidebar() {
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - Fixed height, internal scroll if needed */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out lg:static lg:z-auto",
+          "fixed inset-y-0 left-0 z-40 flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:z-auto overflow-hidden",
           isCollapsed ? "w-16" : "w-64",
           isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
@@ -82,8 +82,8 @@ export function AppSidebar() {
           </div>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3 space-y-1">
+        {/* Navigation - Scrollable if content overflows */}
+        <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
           {navigation.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.href;

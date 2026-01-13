@@ -1,10 +1,19 @@
+/**
+ * Document Capture Page
+ * =====================
+ * Main document capture page with tabs for Request, Generated, and Enquiry.
+ */
+
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DocumentForm } from "@/components/capture/DocumentForm";
+import { GeneratedTab } from "@/components/capture/GeneratedTab";
+import { EnquiryTab } from "@/components/capture/EnquiryTab";
 import { QuickTemplates } from "@/components/capture/QuickTemplates";
 import { RecentUploads } from "@/components/capture/RecentUploads";
 import { DocumentCaptureSkeleton } from "@/components/skeletons/DocumentCaptureSkeleton";
-import { FileText, Search } from "lucide-react";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { FileInput, FileText, Search } from "lucide-react";
 
 export default function DocumentCapture() {
   const [activeTab, setActiveTab] = useState("request");
@@ -21,22 +30,29 @@ export default function DocumentCapture() {
 
   return (
     <div className="p-4 lg:p-6 pt-14 lg:pt-6">
-      {/* Header */}
-      <div className="mb-6 animate-fade-in">
-        <h1 className="text-lg font-bold text-foreground">Document Capture</h1>
-        <p className="text-xs text-muted-foreground">
-          Create and manage document requests
-        </p>
-      </div>
+      {/* Header with Date/Time and Theme Toggle */}
+      <PageHeader
+        title="Document Capture"
+        description="Create, manage, and track document requests"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-4">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="animate-fade-in" style={{ animationDelay: "100ms" }}>
-            <TabsList className="grid w-full grid-cols-3 h-9">
-              <TabsTrigger value="request" className="text-xs">Request</TabsTrigger>
-              <TabsTrigger value="generated" className="text-xs">Generated</TabsTrigger>
-              <TabsTrigger value="enquiry" className="text-xs">Enquiry</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-3 h-10 bg-muted/50">
+              <TabsTrigger value="request" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-card">
+                <FileInput className="h-3.5 w-3.5" />
+                Request
+              </TabsTrigger>
+              <TabsTrigger value="generated" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-card">
+                <FileText className="h-3.5 w-3.5" />
+                Generated
+              </TabsTrigger>
+              <TabsTrigger value="enquiry" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-card">
+                <Search className="h-3.5 w-3.5" />
+                Enquiry
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="request" className="mt-4">
@@ -47,30 +63,16 @@ export default function DocumentCapture() {
             </TabsContent>
 
             <TabsContent value="generated" className="mt-4">
-              <div className="rounded-xl bg-card p-6 shadow-card-md">
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted mb-3">
-                    <FileText className="h-6 w-6 text-muted-foreground" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-foreground">No Generated Documents</h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Documents you generate will appear here
-                  </p>
-                </div>
+              <div className="rounded-xl bg-card p-4 shadow-card-md">
+                <h3 className="text-xs font-semibold text-card-foreground mb-4">Generated Documents</h3>
+                <GeneratedTab />
               </div>
             </TabsContent>
 
             <TabsContent value="enquiry" className="mt-4">
-              <div className="rounded-xl bg-card p-6 shadow-card-md">
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted mb-3">
-                    <Search className="h-6 w-6 text-muted-foreground" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-foreground">Document Enquiry</h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Search and query existing documents
-                  </p>
-                </div>
+              <div className="rounded-xl bg-card p-4 shadow-card-md">
+                <h3 className="text-xs font-semibold text-card-foreground mb-4">Document Enquiries</h3>
+                <EnquiryTab />
               </div>
             </TabsContent>
           </Tabs>

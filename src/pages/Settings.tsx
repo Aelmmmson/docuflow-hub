@@ -1,16 +1,30 @@
+/**
+ * Settings Page
+ * =============
+ * Main settings page with tabbed interface for Users, Parameters,
+ * Document Approval Setup, and Beneficiary management.
+ */
+
 import { useState, useEffect } from "react";
-import { Settings as SettingsIcon, User, Bell, Shield, Palette } from "lucide-react";
+import { Users, FileType, GitBranch, Building2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { UsersTab } from "@/components/settings/UsersTab";
+import { ParametersTab } from "@/components/settings/ParametersTab";
+import { ApprovalSetupTab } from "@/components/settings/ApprovalSetupTab";
+import { BeneficiaryTab } from "@/components/settings/BeneficiaryTab";
 import { SettingsSkeleton } from "@/components/skeletons/SettingsSkeleton";
 
-const settingsSections = [
-  { name: "Profile", description: "Manage your account details", icon: User },
-  { name: "Notifications", description: "Configure notification preferences", icon: Bell },
-  { name: "Security", description: "Password and authentication settings", icon: Shield },
-  { name: "Appearance", description: "Theme and display options", icon: Palette },
+const tabs = [
+  { id: "users", label: "Users", icon: Users },
+  { id: "parameters", label: "Parameters", icon: FileType },
+  { id: "approval", label: "Document Approval Setup", icon: GitBranch },
+  { id: "beneficiary", label: "Beneficiary Setup", icon: Building2 },
 ];
 
 export default function Settings() {
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("users");
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 800);
@@ -23,48 +37,59 @@ export default function Settings() {
 
   return (
     <div className="p-4 lg:p-6 pt-14 lg:pt-6">
-      {/* Header */}
-      <div className="mb-6 animate-fade-in">
-        <h1 className="text-lg font-bold text-foreground">Settings</h1>
-        <p className="text-xs text-muted-foreground">
-          Manage your application preferences
-        </p>
-      </div>
+      {/* Header with Date/Time and Theme Toggle */}
+      <PageHeader
+        title="Settings"
+        description="Manage users, parameters, and system configurations"
+      />
 
-      {/* Settings Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-3xl">
-        {settingsSections.map((section, index) => (
-          <div
-            key={section.name}
-            className="group rounded-xl bg-card p-4 shadow-card-md card-hover cursor-pointer animate-fade-in"
-            style={{ animationDelay: `${index * 100}ms` }}
-          >
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
-                <section.icon className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-card-foreground">{section.name}</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">{section.description}</p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Placeholder Content */}
-      <div className="mt-8 rounded-xl bg-card p-8 shadow-card-md max-w-3xl animate-fade-in" style={{ animationDelay: "400ms" }}>
-        <div className="flex flex-col items-center justify-center text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted mb-4">
-            <SettingsIcon className="h-7 w-7 text-muted-foreground" />
-          </div>
-          <h3 className="text-base font-semibold text-foreground">Settings Coming Soon</h3>
-          <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-            Full settings configuration will be available in a future update. 
-            Use the theme toggle in the sidebar to switch between light and dark modes.
-          </p>
+      {/* Tabbed Interface */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="animate-fade-in">
+        {/* Tab List - Scrollable on mobile */}
+        <div className="overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0 mb-4">
+          <TabsList className="inline-flex h-10 w-auto min-w-full lg:min-w-0 bg-muted/50 p-1">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <TabsTrigger
+                  key={tab.id}
+                  value={tab.id}
+                  className="flex items-center gap-2 text-xs whitespace-nowrap px-3 data-[state=active]:bg-card data-[state=active]:shadow-sm"
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">{tab.label}</span>
+                  <span className="sm:hidden">{tab.label.split(" ")[0]}</span>
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
         </div>
-      </div>
+
+        {/* Tab Contents */}
+        <TabsContent value="users" className="mt-0">
+          <div className="rounded-xl bg-card p-4 shadow-card-md animate-fade-in">
+            <UsersTab />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="parameters" className="mt-0">
+          <div className="rounded-xl bg-card p-4 shadow-card-md animate-fade-in">
+            <ParametersTab />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="approval" className="mt-0">
+          <div className="rounded-xl bg-card p-4 shadow-card-md animate-fade-in">
+            <ApprovalSetupTab />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="beneficiary" className="mt-0">
+          <div className="rounded-xl bg-card p-4 shadow-card-md animate-fade-in">
+            <BeneficiaryTab />
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
