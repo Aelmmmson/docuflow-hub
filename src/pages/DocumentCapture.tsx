@@ -7,9 +7,9 @@
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DocumentForm } from "@/components/capture/DocumentForm";
-import { GeneratedTab } from "@/components/capture/GeneratedTab";
+import { GeneratedTab, GeneratedDocument } from "@/components/capture/GeneratedTab";
 import { EnquiryTab } from "@/components/capture/EnquiryTab";
-import { QuickTemplates } from "@/components/capture/QuickTemplates";
+import { QuickTemplates, Template } from "@/components/capture/QuickTemplates";
 import { RecentUploads } from "@/components/capture/RecentUploads";
 import { DocumentCaptureSkeleton } from "@/components/skeletons/DocumentCaptureSkeleton";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -18,11 +18,27 @@ import { FileInput, FileText, Search } from "lucide-react";
 export default function DocumentCapture() {
   const [activeTab, setActiveTab] = useState("request");
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [newDocuments, setNewDocuments] = useState<GeneratedDocument[]>([]);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 1000);
     return () => clearTimeout(timer);
   }, []);
+
+  const handleTemplateSelect = (template: Template) => {
+    setSelectedTemplate(template);
+  };
+
+  const handleClearTemplate = () => {
+    setSelectedTemplate(null);
+  };
+
+  const handleDocumentSubmit = (document: GeneratedDocument) => {
+    setNewDocuments((prev) => [document, ...prev]);
+    // Switch to Generated tab to show the new document
+    setActiveTab("generated");
+  };
 
   if (isLoading) {
     return <DocumentCaptureSkeleton />;
@@ -59,22 +75,26 @@ export default function DocumentCapture() {
             </TabsList>
 
             <TabsContent value="request" className="mt-4">
-              <div className="rounded-xl bg-card p-4 shadow-card-md">
+              <div className="rounded-xl bg-card p-4 shadow-card-md border border-border">
                 <h3 className="text-xs font-semibold text-card-foreground mb-4">Document Request Form</h3>
-                <DocumentForm />
+                <DocumentForm 
+                  selectedTemplate={selectedTemplate}
+                  onClearTemplate={handleClearTemplate}
+                  onDocumentSubmit={handleDocumentSubmit}
+                />
               </div>
             </TabsContent>
 
             <TabsContent value="generated" className="mt-4">
-              <div className="rounded-xl bg-card p-4 shadow-card-md">
-                <h3 className="text-xs font-semibold text-card-foreground mb-4">Generated Documents</h3>
-                <GeneratedTab />
+              <div className="rounded-xl bg-card p-4 shadow-card-md border border-border">
+                <h3 className="text-xs font-semibold text-card-foreground mb-4">Draft Documents</h3>
+                <GeneratedTab externalDocuments={newDocuments} />
               </div>
             </TabsContent>
 
             <TabsContent value="enquiry" className="mt-4">
-              <div className="rounded-xl bg-card p-4 shadow-card-md">
-                <h3 className="text-xs font-semibold text-card-foreground mb-4">Document Enquiries</h3>
+              <div className="rounded-xl bg-card p-4 shadow-card-md border border-border">
+                <h3 className="text-xs font-semibold text-card-foreground mb-4">All Documents</h3>
                 <EnquiryTab />
               </div>
             </TabsContent>
@@ -86,7 +106,7 @@ export default function DocumentCapture() {
           {activeTab === "request" && (
             <>
               <div className="animate-fade-in" style={{ animationDelay: "200ms" }}>
-                <QuickTemplates />
+                <QuickTemplates onSelectTemplate={handleTemplateSelect} />
               </div>
               <div className="animate-fade-in" style={{ animationDelay: "300ms" }}>
                 <RecentUploads />

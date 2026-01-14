@@ -1,10 +1,10 @@
 /**
  * GeneratedTab Component
  * ======================
- * Displays list of generated documents with actions for Edit, View, Submit, and Declined Reason.
+ * Displays list of generated documents (DRAFT only) with action icons for Edit, View, Submit.
  */
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { FileText, Edit2, Eye, Send, AlertCircle, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,15 +17,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { SearchFilter } from "@/components/shared/SearchFilter";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { ActionMenu } from "@/components/shared/ActionMenu";
 import { RightAside } from "@/components/shared/RightAside";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
 
-interface GeneratedDocument {
+export interface GeneratedDocument {
   id: string;
   referenceNumber: string;
   uploadDate: string;
@@ -34,9 +38,11 @@ interface GeneratedDocument {
   status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "PAID";
   fileName?: string;
   rejectionReason?: string;
+  amount?: string;
+  customerNumber?: string;
 }
 
-// Mock data
+// Mock data - only DRAFT documents for Generated tab
 const mockDocuments: GeneratedDocument[] = [
   {
     id: "1",
@@ -46,43 +52,19 @@ const mockDocuments: GeneratedDocument[] = [
     description: "Monthly electricity bill for HQ building",
     status: "DRAFT",
     fileName: "electric_bill_jan.pdf",
+    amount: "2500",
+    customerNumber: "CUST-001",
   },
   {
     id: "2",
-    referenceNumber: "1768228852",
-    uploadDate: "2024-01-14",
-    type: "NEWSPAPER EXPENSE",
-    description: "Daily newspaper subscription Q1",
-    status: "SUBMITTED",
-    fileName: "newspaper_invoice.pdf",
-  },
-  {
-    id: "3",
-    referenceNumber: "1768228853",
-    uploadDate: "2024-01-13",
-    type: "TRAVEL REIMBURSEMENT",
-    description: "Business trip to Lagos - client meeting",
-    status: "APPROVED",
-    fileName: "travel_receipts.pdf",
-  },
-  {
-    id: "4",
-    referenceNumber: "1768228854",
-    uploadDate: "2024-01-12",
+    referenceNumber: "1768228856",
+    uploadDate: "2024-01-16",
     type: "OFFICE SUPPLIES",
-    description: "Stationery purchase for Q1",
-    status: "REJECTED",
-    fileName: "office_supplies.pdf",
-    rejectionReason: "Missing itemized receipt. Please provide detailed breakdown of all items purchased.",
-  },
-  {
-    id: "5",
-    referenceNumber: "1768228855",
-    uploadDate: "2024-01-11",
-    type: "INVOICE PAYMENT",
-    description: "Vendor payment - IT services",
-    status: "PAID",
-    fileName: "it_services_invoice.pdf",
+    description: "Office stationery for January",
+    status: "DRAFT",
+    fileName: "stationery_invoice.pdf",
+    amount: "350",
+    customerNumber: "CUST-002",
   },
 ];
 
@@ -94,11 +76,16 @@ const documentTypes = [
   "INVOICE PAYMENT",
 ];
 
-export function GeneratedTab() {
+interface GeneratedTabProps {
+  externalDocuments?: GeneratedDocument[];
+}
+
+export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
   const { toast } = useToast();
-  const [documents, setDocuments] = useState<GeneratedDocument[]>(mockDocuments);
+  const [documents, setDocuments] = useState<GeneratedDocument[]>(
+    externalDocuments ? [...externalDocuments, ...mockDocuments] : mockDocuments
+  );
   const [searchValue, setSearchValue] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
 
   // Edit aside state
@@ -116,14 +103,16 @@ export function GeneratedTab() {
   const [isDeclinedOpen, setIsDeclinedOpen] = useState(false);
   const [declinedDoc, setDeclinedDoc] = useState<GeneratedDocument | null>(null);
 
-  const filteredDocuments = documents.filter((doc) => {
+  // Filter only DRAFT documents
+  const draftDocuments = documents.filter((doc) => doc.status === "DRAFT");
+
+  const filteredDocuments = draftDocuments.filter((doc) => {
     const matchesSearch =
       doc.referenceNumber.includes(searchValue) ||
       doc.description.toLowerCase().includes(searchValue.toLowerCase()) ||
       doc.type.toLowerCase().includes(searchValue.toLowerCase());
-    const matchesStatus = statusFilter === "all" || doc.status === statusFilter;
     const matchesType = typeFilter === "all" || doc.type === typeFilter;
-    return matchesSearch && matchesStatus && matchesType;
+    return matchesSearch && matchesType;
   });
 
   const handleEdit = (doc: GeneratedDocument) => {
@@ -178,47 +167,6 @@ export function GeneratedTab() {
     setIsEditOpen(false);
   };
 
-  const getStatusActions = (doc: GeneratedDocument) => {
-    const actions = [];
-
-    // Edit - available for DRAFT only
-    if (doc.status === "DRAFT") {
-      actions.push({
-        label: "Edit",
-        icon: <Edit2 className="h-3 w-3" />,
-        onClick: () => handleEdit(doc),
-      });
-    }
-
-    // View - always available
-    actions.push({
-      label: "View",
-      icon: <Eye className="h-3 w-3" />,
-      onClick: () => handleView(doc),
-    });
-
-    // Submit - available for DRAFT only
-    if (doc.status === "DRAFT") {
-      actions.push({
-        label: "Submit",
-        icon: <Send className="h-3 w-3" />,
-        onClick: () => handleSubmit(doc),
-      });
-    }
-
-    // Declined Reason - available for REJECTED only
-    if (doc.status === "REJECTED") {
-      actions.push({
-        label: "Declined Reason",
-        icon: <AlertCircle className="h-3 w-3" />,
-        onClick: () => handleShowDeclinedReason(doc),
-        variant: "destructive" as const,
-      });
-    }
-
-    return actions;
-  };
-
   const columns: Column<GeneratedDocument>[] = [
     {
       key: "id",
@@ -250,9 +198,79 @@ export function GeneratedTab() {
     },
     {
       key: "actions",
-      header: "",
-      className: "w-12",
-      render: (doc) => <ActionMenu actions={getStatusActions(doc)} />,
+      header: "Actions",
+      className: "w-32",
+      render: (doc) => (
+        <TooltipProvider>
+          <div className="flex items-center gap-1">
+            {/* Edit - available for DRAFT only */}
+            {doc.status === "DRAFT" && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => handleEdit(doc)}
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Edit</TooltipContent>
+              </Tooltip>
+            )}
+
+            {/* View - always available */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => handleView(doc)}
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>View</TooltipContent>
+            </Tooltip>
+
+            {/* Submit - available for DRAFT only */}
+            {doc.status === "DRAFT" && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-primary"
+                    onClick={() => handleSubmit(doc)}
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Submit</TooltipContent>
+              </Tooltip>
+            )}
+
+            {/* Declined Reason - available for REJECTED only */}
+            {doc.status === "REJECTED" && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive"
+                    onClick={() => handleShowDeclinedReason(doc)}
+                  >
+                    <AlertCircle className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Declined Reason</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        </TooltipProvider>
+      ),
     },
   ];
 
@@ -262,22 +280,8 @@ export function GeneratedTab() {
       <SearchFilter
         searchValue={searchValue}
         onSearchChange={setSearchValue}
-        searchPlaceholder="Search documents..."
+        searchPlaceholder="Search draft documents..."
         filters={[
-          {
-            key: "status",
-            label: "Status",
-            value: statusFilter,
-            onChange: setStatusFilter,
-            options: [
-              { value: "all", label: "All Status" },
-              { value: "DRAFT", label: "Draft" },
-              { value: "SUBMITTED", label: "Submitted" },
-              { value: "APPROVED", label: "Approved" },
-              { value: "REJECTED", label: "Rejected" },
-              { value: "PAID", label: "Paid" },
-            ],
-          },
           {
             key: "type",
             label: "Type",
@@ -297,7 +301,7 @@ export function GeneratedTab() {
           data={filteredDocuments}
           columns={columns}
           keyExtractor={(doc) => doc.id}
-          emptyMessage="No generated documents found"
+          emptyMessage="No draft documents found"
         />
       </div>
 
