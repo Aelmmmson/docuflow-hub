@@ -1,66 +1,94 @@
 /**
  * EnquiryTab Component
  * ====================
- * Displays list of document enquiries with search and filter capabilities.
+ * Displays ALL documents (not just drafts) with search and filter capabilities.
  */
 
 import { useState } from "react";
-import { Search, Eye, MessageSquare } from "lucide-react";
+import { FileText, Eye, Edit2, Send, AlertCircle } from "lucide-react";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { SearchFilter } from "@/components/shared/SearchFilter";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { ActionMenu } from "@/components/shared/ActionMenu";
 import { RightAside } from "@/components/shared/RightAside";
 
-interface Enquiry {
+interface Document {
   id: string;
   referenceNumber: string;
+  uploadDate: string;
   type: string;
   description: string;
-  status: "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
-  createdAt: string;
-  resolvedAt?: string;
-  response?: string;
+  status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "PAID";
+  fileName?: string;
+  rejectionReason?: string;
+  amount?: string;
+  customerNumber?: string;
 }
 
-// Mock data
-const mockEnquiries: Enquiry[] = [
+// Mock data - ALL documents for Enquiry tab
+const mockDocuments: Document[] = [
   {
-    id: "ENQ001",
+    id: "1",
     referenceNumber: "1768228851",
+    uploadDate: "2024-01-15",
     type: "ELECTRIC EXPENSES",
-    description: "Query about electricity bill discrepancy for January",
-    status: "OPEN",
-    createdAt: "2024-01-15",
+    description: "Monthly electricity bill for HQ building",
+    status: "DRAFT",
+    fileName: "electric_bill_jan.pdf",
+    amount: "2500",
+    customerNumber: "CUST-001",
   },
   {
-    id: "ENQ002",
+    id: "2",
     referenceNumber: "1768228852",
-    type: "TRAVEL REIMBURSEMENT",
-    description: "Missing receipt clarification needed",
-    status: "IN_PROGRESS",
-    createdAt: "2024-01-14",
+    uploadDate: "2024-01-14",
+    type: "NEWSPAPER EXPENSE",
+    description: "Daily newspaper subscription Q1",
+    status: "SUBMITTED",
+    fileName: "newspaper_invoice.pdf",
+    amount: "150",
+    customerNumber: "CUST-002",
   },
   {
-    id: "ENQ003",
+    id: "3",
     referenceNumber: "1768228853",
-    type: "INVOICE PAYMENT",
-    description: "Vendor payment confirmation request",
-    status: "RESOLVED",
-    createdAt: "2024-01-13",
-    resolvedAt: "2024-01-14",
-    response: "Payment has been processed. Transaction ID: TXN-2024-0043",
+    uploadDate: "2024-01-13",
+    type: "TRAVEL REIMBURSEMENT",
+    description: "Business trip to Lagos - client meeting",
+    status: "APPROVED",
+    fileName: "travel_receipts.pdf",
+    amount: "5000",
+    customerNumber: "CUST-003",
   },
   {
-    id: "ENQ004",
+    id: "4",
     referenceNumber: "1768228854",
+    uploadDate: "2024-01-12",
     type: "OFFICE SUPPLIES",
-    description: "Budget allocation query for Q2",
-    status: "CLOSED",
-    createdAt: "2024-01-10",
-    resolvedAt: "2024-01-12",
-    response: "Q2 budget has been approved. Please submit requisitions by March 15th.",
+    description: "Stationery purchase for Q1",
+    status: "REJECTED",
+    fileName: "office_supplies.pdf",
+    rejectionReason: "Missing itemized receipt. Please provide detailed breakdown of all items purchased.",
+    amount: "350",
+    customerNumber: "CUST-004",
+  },
+  {
+    id: "5",
+    referenceNumber: "1768228855",
+    uploadDate: "2024-01-11",
+    type: "INVOICE PAYMENT",
+    description: "Vendor payment - IT services",
+    status: "PAID",
+    fileName: "it_services_invoice.pdf",
+    amount: "12000",
+    customerNumber: "CUST-005",
   },
 ];
 
@@ -73,47 +101,57 @@ const documentTypes = [
 ];
 
 export function EnquiryTab() {
-  const [enquiries] = useState<Enquiry[]>(mockEnquiries);
+  const [documents] = useState<Document[]>(mockDocuments);
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
 
   // View aside state
   const [isViewOpen, setIsViewOpen] = useState(false);
-  const [viewingEnquiry, setViewingEnquiry] = useState<Enquiry | null>(null);
+  const [viewingDoc, setViewingDoc] = useState<Document | null>(null);
 
-  const filteredEnquiries = enquiries.filter((enq) => {
+  // Declined reason aside state
+  const [isDeclinedOpen, setIsDeclinedOpen] = useState(false);
+  const [declinedDoc, setDeclinedDoc] = useState<Document | null>(null);
+
+  const filteredDocuments = documents.filter((doc) => {
     const matchesSearch =
-      enq.referenceNumber.includes(searchValue) ||
-      enq.description.toLowerCase().includes(searchValue.toLowerCase()) ||
-      enq.type.toLowerCase().includes(searchValue.toLowerCase());
-    const matchesStatus = statusFilter === "all" || enq.status === statusFilter;
-    const matchesType = typeFilter === "all" || enq.type === typeFilter;
+      doc.referenceNumber.includes(searchValue) ||
+      doc.description.toLowerCase().includes(searchValue.toLowerCase()) ||
+      doc.type.toLowerCase().includes(searchValue.toLowerCase());
+    const matchesStatus = statusFilter === "all" || doc.status === statusFilter;
+    const matchesType = typeFilter === "all" || doc.type === typeFilter;
     return matchesSearch && matchesStatus && matchesType;
   });
 
-  const handleView = (enq: Enquiry) => {
-    setViewingEnquiry(enq);
+  const handleView = (doc: Document) => {
+    setViewingDoc(doc);
     setIsViewOpen(true);
   };
 
-  const columns: Column<Enquiry>[] = [
+  const handleShowDeclinedReason = (doc: Document) => {
+    setDeclinedDoc(doc);
+    setIsDeclinedOpen(true);
+  };
+
+  const columns: Column<Document>[] = [
     {
       key: "id",
       header: "ID",
-      className: "w-20 text-xs",
+      className: "w-12",
+      render: (_, index) => <span className="text-xs text-muted-foreground">{index + 1}</span>,
     },
     {
       key: "document",
-      header: "Document Ref",
-      render: (enq) => (
+      header: "Document",
+      render: (doc) => (
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-            <MessageSquare className="h-4 w-4 text-primary" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-destructive/10">
+            <FileText className="h-4 w-4 text-destructive" />
           </div>
           <div>
-            <p className="text-xs font-medium">{enq.referenceNumber}</p>
-            <p className="text-[10px] text-muted-foreground">{enq.createdAt}</p>
+            <p className="text-xs font-medium">{doc.referenceNumber}</p>
+            <p className="text-[10px] text-muted-foreground">{doc.uploadDate}</p>
           </div>
         </div>
       ),
@@ -128,22 +166,48 @@ export function EnquiryTab() {
     {
       key: "status",
       header: "Status",
-      render: (enq) => <StatusBadge status={enq.status.replace("_", " ")} />,
+      render: (doc) => <StatusBadge status={doc.status} />,
     },
     {
       key: "actions",
-      header: "",
-      className: "w-12",
-      render: (enq) => (
-        <ActionMenu
-          actions={[
-            {
-              label: "View Details",
-              icon: <Eye className="h-3 w-3" />,
-              onClick: () => handleView(enq),
-            },
-          ]}
-        />
+      header: "Actions",
+      className: "w-24",
+      render: (doc) => (
+        <TooltipProvider>
+          <div className="flex items-center gap-1">
+            {/* View - always available */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => handleView(doc)}
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>View</TooltipContent>
+            </Tooltip>
+
+            {/* Declined Reason - available for REJECTED only */}
+            {doc.status === "REJECTED" && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive"
+                    onClick={() => handleShowDeclinedReason(doc)}
+                  >
+                    <AlertCircle className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Declined Reason</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        </TooltipProvider>
       ),
     },
   ];
@@ -154,7 +218,7 @@ export function EnquiryTab() {
       <SearchFilter
         searchValue={searchValue}
         onSearchChange={setSearchValue}
-        searchPlaceholder="Search enquiries..."
+        searchPlaceholder="Search all documents..."
         filters={[
           {
             key: "status",
@@ -163,10 +227,11 @@ export function EnquiryTab() {
             onChange: setStatusFilter,
             options: [
               { value: "all", label: "All Status" },
-              { value: "OPEN", label: "Open" },
-              { value: "IN_PROGRESS", label: "In Progress" },
-              { value: "RESOLVED", label: "Resolved" },
-              { value: "CLOSED", label: "Closed" },
+              { value: "DRAFT", label: "Draft" },
+              { value: "SUBMITTED", label: "Submitted" },
+              { value: "APPROVED", label: "Approved" },
+              { value: "REJECTED", label: "Rejected" },
+              { value: "PAID", label: "Paid" },
             ],
           },
           {
@@ -185,10 +250,10 @@ export function EnquiryTab() {
       {/* Data Table */}
       <div className="rounded-lg border border-border">
         <DataTable
-          data={filteredEnquiries}
+          data={filteredDocuments}
           columns={columns}
-          keyExtractor={(enq) => enq.id}
-          emptyMessage="No enquiries found"
+          keyExtractor={(doc) => doc.id}
+          emptyMessage="No documents found"
         />
       </div>
 
@@ -196,57 +261,111 @@ export function EnquiryTab() {
       <RightAside
         isOpen={isViewOpen}
         onClose={() => setIsViewOpen(false)}
-        title="Enquiry Details"
-        subtitle={viewingEnquiry ? `ID: ${viewingEnquiry.id}` : ""}
+        title="Document Details"
+        subtitle={viewingDoc ? `Reference: ${viewingDoc.referenceNumber}` : ""}
       >
-        {viewingEnquiry && (
+        {viewingDoc && (
           <div className="space-y-4">
             {/* Status Badge */}
             <div className="flex justify-center">
-              <StatusBadge status={viewingEnquiry.status.replace("_", " ")} className="text-xs px-3 py-1" />
+              <StatusBadge status={viewingDoc.status} className="text-xs px-3 py-1" />
             </div>
 
             {/* Details Card */}
             <div className="rounded-lg bg-muted/50 p-4 space-y-3">
               <div className="flex justify-between">
                 <span className="text-xs text-muted-foreground">Reference</span>
-                <span className="text-xs font-medium">{viewingEnquiry.referenceNumber}</span>
+                <span className="text-xs font-medium">{viewingDoc.referenceNumber}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-xs text-muted-foreground">Type</span>
-                <span className="text-xs font-medium">{viewingEnquiry.type}</span>
+                <span className="text-xs font-medium">{viewingDoc.type}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-xs text-muted-foreground">Created</span>
-                <span className="text-xs font-medium">{viewingEnquiry.createdAt}</span>
+                <span className="text-xs text-muted-foreground">Upload Date</span>
+                <span className="text-xs font-medium">{viewingDoc.uploadDate}</span>
               </div>
-              {viewingEnquiry.resolvedAt && (
+              {viewingDoc.amount && (
                 <div className="flex justify-between">
-                  <span className="text-xs text-muted-foreground">Resolved</span>
-                  <span className="text-xs font-medium">{viewingEnquiry.resolvedAt}</span>
+                  <span className="text-xs text-muted-foreground">Amount</span>
+                  <span className="text-xs font-medium">${viewingDoc.amount}</span>
+                </div>
+              )}
+              {viewingDoc.customerNumber && (
+                <div className="flex justify-between">
+                  <span className="text-xs text-muted-foreground">Customer</span>
+                  <span className="text-xs font-medium">{viewingDoc.customerNumber}</span>
                 </div>
               )}
             </div>
 
             {/* Description */}
             <div className="space-y-2">
-              <Label className="text-xs font-medium">Enquiry</Label>
+              <Label className="text-xs font-medium">Description</Label>
               <p className="text-xs text-foreground bg-muted/50 rounded-lg p-3 leading-relaxed">
-                {viewingEnquiry.description}
+                {viewingDoc.description}
               </p>
             </div>
 
-            {/* Response (if available) */}
-            {viewingEnquiry.response && (
+            {/* Attached File */}
+            {viewingDoc.fileName && (
               <div className="space-y-2">
-                <Label className="text-xs font-medium">Response</Label>
-                <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
-                  <p className="text-xs text-foreground leading-relaxed">
-                    {viewingEnquiry.response}
+                <Label className="text-xs font-medium">Attached File</Label>
+                <div className="flex items-center gap-2 p-3 rounded-lg border border-border">
+                  <FileText className="h-5 w-5 text-destructive" />
+                  <span className="text-xs flex-1">{viewingDoc.fileName}</span>
+                  <Button variant="outline" size="sm" className="h-7 text-xs">
+                    Download
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Rejection Reason (if applicable) */}
+            {viewingDoc.status === "REJECTED" && viewingDoc.rejectionReason && (
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-destructive">Rejection Reason</Label>
+                <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+                  <p className="text-xs text-destructive leading-relaxed">
+                    {viewingDoc.rejectionReason}
                   </p>
                 </div>
               </div>
             )}
+          </div>
+        )}
+      </RightAside>
+
+      {/* Declined Reason Aside (auto-close after 15s) */}
+      <RightAside
+        isOpen={isDeclinedOpen}
+        onClose={() => setIsDeclinedOpen(false)}
+        title="Rejection Reason"
+        subtitle={declinedDoc ? `Reference: ${declinedDoc.referenceNumber}` : ""}
+        autoCloseAfter={15}
+      >
+        {declinedDoc && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+              <AlertCircle className="h-6 w-6 text-destructive shrink-0" />
+              <div>
+                <p className="text-xs font-semibold text-destructive">Document Rejected</p>
+                <p className="text-[10px] text-destructive/80">
+                  This document was not approved
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">Reason for Rejection</Label>
+              <p className="text-sm text-foreground bg-muted/50 rounded-lg p-4 leading-relaxed">
+                {declinedDoc.rejectionReason || "No reason provided."}
+              </p>
+            </div>
+
+            <p className="text-[10px] text-muted-foreground text-center">
+              This panel will automatically close in 15 seconds
+            </p>
           </div>
         )}
       </RightAside>

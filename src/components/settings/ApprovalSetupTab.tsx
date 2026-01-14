@@ -5,12 +5,13 @@
  */
 
 import { useState } from "react";
-import { Plus, Edit2, Save, ChevronLeft, ChevronRight, Check, Users } from "lucide-react";
+import { Plus, Edit2, Save, ChevronLeft, ChevronRight, Check, Users, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Select,
   SelectContent,
@@ -18,9 +19,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { SearchFilter } from "@/components/shared/SearchFilter";
 import { DataTable, Column } from "@/components/shared/DataTable";
-import { ActionMenu } from "@/components/shared/ActionMenu";
 import { RightAside } from "@/components/shared/RightAside";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -92,6 +98,10 @@ export function ApprovalSetupTab() {
   const [isAsideOpen, setIsAsideOpen] = useState(false);
   const [editingSetup, setEditingSetup] = useState<ApprovalSetup | null>(null);
 
+  // View aside state
+  const [isViewOpen, setIsViewOpen] = useState(false);
+  const [viewingSetup, setViewingSetup] = useState<ApprovalSetup | null>(null);
+
   // Wizard state
   const [currentStep, setCurrentStep] = useState(0); // 0 = config, 1+ = stages
   const [documentType, setDocumentType] = useState("");
@@ -129,6 +139,11 @@ export function ApprovalSetupTab() {
     setNumberOfStages(setup.stages.length);
     setStages([...setup.stages]);
     setIsAsideOpen(true);
+  };
+
+  const handleView = (setup: ApprovalSetup) => {
+    setViewingSetup(setup);
+    setIsViewOpen(true);
   };
 
   const handleNextStep = () => {
@@ -174,6 +189,15 @@ export function ApprovalSetupTab() {
         });
         return;
       }
+      // Validate mandatory approvers do not exceed quorum
+      if (stage.mandatoryApprovers.length > stage.quorum) {
+        toast({
+          title: "Validation Error",
+          description: "Mandatory approvers cannot exceed the quorum number.",
+          variant: "destructive",
+        });
+        return;
+      }
     }
     
     setCurrentStep((prev) => Math.min(prev + 1, numberOfStages));
@@ -191,6 +215,16 @@ export function ApprovalSetupTab() {
       toast({
         title: "Validation Error",
         description: "Please complete all stage fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate mandatory approvers for last stage
+    if (lastStage.mandatoryApprovers.length > lastStage.quorum) {
+      toast({
+        title: "Validation Error",
+        description: "Mandatory approvers cannot exceed the quorum number.",
         variant: "destructive",
       });
       return;
@@ -261,6 +295,16 @@ export function ApprovalSetupTab() {
     const stage = stages[stageIndex];
     const isMandatory = stage.mandatoryApprovers.includes(approverName);
     
+    // Check if adding would exceed quorum
+    if (!isMandatory && stage.mandatoryApprovers.length >= stage.quorum) {
+      toast({
+        title: "Cannot Add Mandatory Approver",
+        description: `Mandatory approvers cannot exceed quorum (${stage.quorum}).`,
+        variant: "destructive",
+      });
+      return;
+    }
+    
     updateStage(stageIndex, {
       mandatoryApprovers: isMandatory
         ? stage.mandatoryApprovers.filter((a) => a !== approverName)
@@ -292,18 +336,39 @@ export function ApprovalSetupTab() {
     },
     {
       key: "actions",
-      header: "",
-      className: "w-12",
+      header: "Actions",
+      className: "w-24",
       render: (setup) => (
-        <ActionMenu
-          actions={[
-            {
-              label: "Edit",
-              icon: <Edit2 className="h-3 w-3" />,
-              onClick: () => handleEdit(setup),
-            },
-          ]}
-        />
+        <TooltipProvider>
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => handleEdit(setup)}
+                >
+                  <Edit2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Edit</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => handleView(setup)}
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>View</TooltipContent>
+            </Tooltip>
+          </div>
+        </TooltipProvider>
       ),
     },
   ];
@@ -426,7 +491,16 @@ export function ApprovalSetupTab() {
                   value={stages[currentStep - 1].quorum}
                   onChange={(e) => {
                     const val = Math.max(1, parseInt(e.target.value) || 1);
-                    updateStage(currentStep - 1, { quorum: val });
+                    const stage = stages[currentStep - 1];
+                    // If reducing quorum below mandatory count, trim mandatory approvers
+                    if (val < stage.mandatoryApprovers.length) {
+                      updateStage(currentStep - 1, { 
+                        quorum: val,
+                        mandatoryApprovers: stage.mandatoryApprovers.slice(0, val)
+                      });
+                    } else {
+                      updateStage(currentStep - 1, { quorum: val });
+                    }
                   }}
                   className="h-9"
                 />
@@ -485,19 +559,32 @@ export function ApprovalSetupTab() {
                   <Label className="text-xs font-medium">
                     Mandatory Approvers <span className="text-muted-foreground">(optional)</span>
                   </Label>
+                  
+                  {/* Alert when approaching/at quorum limit */}
+                  {stages[currentStep - 1].mandatoryApprovers.length >= stages[currentStep - 1].quorum && (
+                    <Alert variant="destructive" className="py-2">
+                      <AlertDescription className="text-xs">
+                        Mandatory approvers cannot exceed quorum ({stages[currentStep - 1].quorum}).
+                        {stages[currentStep - 1].mandatoryApprovers.length === stages[currentStep - 1].quorum && " Maximum reached."}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  
                   <div className="border border-border rounded-lg p-3 space-y-2">
                     {stages[currentStep - 1].approvers.map((approverName) => {
                       const isMandatory = stages[currentStep - 1].mandatoryApprovers.includes(approverName);
+                      const isDisabled = !isMandatory && stages[currentStep - 1].mandatoryApprovers.length >= stages[currentStep - 1].quorum;
                       return (
-                        <div key={approverName} className="flex items-center gap-2">
+                        <div key={approverName} className={cn("flex items-center gap-2", isDisabled && "opacity-50")}>
                           <Checkbox
                             id={`mandatory-${approverName}`}
                             checked={isMandatory}
+                            disabled={isDisabled}
                             onCheckedChange={() => toggleMandatory(currentStep - 1, approverName)}
                           />
                           <Label
                             htmlFor={`mandatory-${approverName}`}
-                            className="text-xs font-normal cursor-pointer"
+                            className={cn("text-xs font-normal", isDisabled ? "cursor-not-allowed" : "cursor-pointer")}
                           >
                             {approverName}
                           </Label>
@@ -505,6 +592,9 @@ export function ApprovalSetupTab() {
                       );
                     })}
                   </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Selected: {stages[currentStep - 1].mandatoryApprovers.length} / {stages[currentStep - 1].quorum} (max)
+                  </p>
                 </div>
               )}
             </div>
@@ -549,6 +639,66 @@ export function ApprovalSetupTab() {
             )}
           </div>
         </div>
+      </RightAside>
+
+      {/* View Aside */}
+      <RightAside
+        isOpen={isViewOpen}
+        onClose={() => setIsViewOpen(false)}
+        title="View Approval Setup"
+        subtitle={viewingSetup ? viewingSetup.documentType : ""}
+      >
+        {viewingSetup && (
+          <div className="space-y-4">
+            <div className="rounded-lg bg-muted/50 p-4 space-y-3">
+              <div className="flex justify-between">
+                <span className="text-xs text-muted-foreground">ID</span>
+                <span className="text-xs font-medium">{viewingSetup.id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs text-muted-foreground">Document Type</span>
+                <span className="text-xs font-medium">{viewingSetup.documentType}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs text-muted-foreground">Total Approvers</span>
+                <span className="text-xs font-medium">{viewingSetup.approversCount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs text-muted-foreground">Required Approvers</span>
+                <span className="text-xs font-medium">{viewingSetup.requiredApproversCount}</span>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Label className="text-xs font-medium">Approval Stages</Label>
+              {viewingSetup.stages.map((stage, index) => (
+                <div key={index} className="rounded-lg border border-border p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+                      {index + 1}
+                    </div>
+                    <span className="text-xs font-medium">{stage.description}</span>
+                  </div>
+                  <div className="pl-8 space-y-1">
+                    <p className="text-[10px] text-muted-foreground">Quorum: {stage.quorum}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {stage.approvers.map((approver) => (
+                        <Badge 
+                          key={approver} 
+                          variant={stage.mandatoryApprovers.includes(approver) ? "default" : "secondary"} 
+                          className="text-[10px]"
+                        >
+                          {approver}
+                          {stage.mandatoryApprovers.includes(approver) && " *"}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </RightAside>
     </div>
   );

@@ -1,22 +1,63 @@
-import { Mail, Calendar, FileText, Star } from "lucide-react";
+import { Mail, Calendar, FileText, Star, Zap, Receipt } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const templates = [
-  { name: "Email Template", icon: Mail, mostUsed: true },
-  { name: "Event Planner", icon: Calendar, mostUsed: false },
-  { name: "Blog Post", icon: FileText, mostUsed: false },
+export interface Template {
+  id: string;
+  name: string;
+  icon: React.ComponentType<{ className?: string }>;
+  mostUsed: boolean;
+  documentType: string;
+  defaultDescription: string;
+}
+
+const templates: Template[] = [
+  { 
+    id: "expense",
+    name: "Expense Report", 
+    icon: Receipt, 
+    mostUsed: true,
+    documentType: "expense",
+    defaultDescription: "Monthly expense report submission",
+  },
+  { 
+    id: "invoice",
+    name: "Invoice Request", 
+    icon: FileText, 
+    mostUsed: false,
+    documentType: "invoice",
+    defaultDescription: "Vendor invoice for payment processing",
+  },
+  { 
+    id: "contract",
+    name: "Contract Document", 
+    icon: Calendar, 
+    mostUsed: false,
+    documentType: "contract",
+    defaultDescription: "Contract document for approval",
+  },
 ];
 
-export function QuickTemplates() {
+interface QuickTemplatesProps {
+  onSelectTemplate?: (template: Template) => void;
+}
+
+export function QuickTemplates({ onSelectTemplate }: QuickTemplatesProps) {
+  const handleTemplateClick = (template: Template) => {
+    if (onSelectTemplate) {
+      onSelectTemplate(template);
+    }
+  };
+
   return (
-    <div className="rounded-xl bg-card p-4 shadow-card-md">
+    <div className="rounded-xl bg-card p-4 shadow-card-md border border-border">
       <h3 className="text-xs font-semibold text-card-foreground mb-3">Quick Templates</h3>
       <div className="space-y-2">
         {templates.map((template) => (
           <button
-            key={template.name}
+            key={template.id}
+            onClick={() => handleTemplateClick(template)}
             className={cn(
-              "flex w-full items-center justify-between rounded-lg p-2.5 transition-colors hover:bg-muted",
+              "flex w-full items-center justify-between rounded-lg p-2.5 transition-all hover:bg-muted hover:scale-[1.02] active:scale-[0.98]",
               template.mostUsed && "bg-muted/50"
             )}
           >
