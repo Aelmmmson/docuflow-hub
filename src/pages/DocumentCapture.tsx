@@ -28,6 +28,9 @@ export default function DocumentCapture() {
     return <DocumentCaptureSkeleton />;
   }
 
+  // Determine column span based on active tab
+  const mainColSpan = activeTab === "request" ? "lg:col-span-2" : "lg:col-span-3";
+
   return (
     <div className="p-4 lg:p-6 pt-14 lg:pt-6">
       {/* Header with Date/Time and Theme Toggle */}
@@ -37,8 +40,8 @@ export default function DocumentCapture() {
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Main Content */}
-        <div className="lg:col-span-2 space-y-4">
+        {/* Main Content - changes span depending on tab */}
+        <div className={`${mainColSpan} space-y-4 transition-all duration-300 ease-in-out`}>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="animate-fade-in" style={{ animationDelay: "100ms" }}>
             <TabsList className="grid w-full grid-cols-3 h-10 bg-muted/50">
               <TabsTrigger value="request" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-card">
@@ -78,14 +81,18 @@ export default function DocumentCapture() {
           </Tabs>
         </div>
 
-        {/* Sidebar */}
-        <div className="space-y-4">
-          <div className="animate-fade-in" style={{ animationDelay: "200ms" }}>
-            <QuickTemplates />
-          </div>
-          <div className="animate-fade-in" style={{ animationDelay: "300ms" }}>
-            <RecentUploads />
-          </div>
+        {/* Sidebar - always in DOM, but content conditionally shown */}
+        <div className="space-y-4 lg:block hidden">
+          {activeTab === "request" && (
+            <>
+              <div className="animate-fade-in" style={{ animationDelay: "200ms" }}>
+                <QuickTemplates />
+              </div>
+              <div className="animate-fade-in" style={{ animationDelay: "300ms" }}>
+                <RecentUploads />
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
