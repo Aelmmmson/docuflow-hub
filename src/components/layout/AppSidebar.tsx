@@ -1,12 +1,27 @@
-import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, FileInput, Settings, FileText, Menu, X, LogOut, CheckCircle } from "lucide-react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import {
+  LayoutDashboard,
+  FileInput,
+  Settings,
+  FileText,
+  Menu,
+  X,
+  LogOut,
+  CheckCircle,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { logout } from "@/lib/auth";
 
 function MenuIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="white"
+      xmlns="http://www.w3.org/2000/svg"
+    >
       <rect x="3" y="6" width="8" height="3" rx="1" />
       <rect x="13" y="6" width="8" height="3" rx="1" />
       <rect x="3" y="11" width="8" height="3" rx="1" />
@@ -29,8 +44,14 @@ const user = {
 
 export function AppSidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
 
   return (
     <>
@@ -41,7 +62,11 @@ export function AppSidebar() {
         className="fixed top-3 left-3 z-50 lg:hidden h-9 w-9"
         onClick={() => setIsMobileOpen(!isMobileOpen)}
       >
-        {isMobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        {isMobileOpen ? (
+          <X className="h-5 w-5" />
+        ) : (
+          <Menu className="h-5 w-5" />
+        )}
       </Button>
 
       {/* Overlay */}
@@ -57,7 +82,7 @@ export function AppSidebar() {
         className={cn(
           "fixed inset-y-0 left-0 z-40 flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:z-auto overflow-hidden",
           isCollapsed ? "w-16" : "w-64",
-          isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
       >
         {/* Logo with Menu Toggle */}
@@ -97,7 +122,9 @@ export function AppSidebar() {
                     isActive
                       ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 shadow-sm"
                       : "text-sidebar-foreground/70 hover:bg-sidebar-accent",
-                    isCollapsed ? "justify-center rounded-lg p-3" : "rounded-xl px-4 py-3"
+                    isCollapsed
+                      ? "justify-center rounded-lg p-3"
+                      : "rounded-xl px-4 py-3",
                   )}
                 >
                   <Icon className="h-4 w-4 flex-shrink-0" />
@@ -128,7 +155,9 @@ export function AppSidebar() {
                 location.pathname === "/settings"
                   ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 shadow-sm"
                   : "text-sidebar-foreground/70 hover:bg-sidebar-accent",
-                isCollapsed ? "justify-center rounded-lg p-3" : "rounded-xl px-4 py-3"
+                isCollapsed
+                  ? "justify-center rounded-lg p-3"
+                  : "rounded-xl px-4 py-3",
               )}
             >
               <Settings className="h-4 w-4 flex-shrink-0" />
@@ -148,7 +177,10 @@ export function AppSidebar() {
               <div className="flex items-center gap-3 rounded-xl bg-sidebar-accent p-3">
                 <div className="relative flex-shrink-0">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-sm font-bold shadow-lg">
-                    {user.name.split(" ").map(n => n[0]).join("")}
+                    {user.name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")}
                   </div>
                   <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-sidebar" />
                 </div>
@@ -160,7 +192,8 @@ export function AppSidebar() {
                     {user.email}
                   </p>
                 </div>
-                <button 
+                <button
+                  onClick={handleLogout}
                   className="flex h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
                   title="Logout"
                 >
@@ -176,7 +209,10 @@ export function AppSidebar() {
               <div className="flex justify-center">
                 <div className="relative">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-sm font-bold shadow-lg cursor-pointer">
-                    {user.name.split(" ").map(n => n[0]).join("")}
+                    {user.name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")}
                   </div>
                   <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-sidebar" />
                 </div>

@@ -10,6 +10,8 @@ import DocumentCapture from "./pages/DocumentCapture";
 import Approval from "./pages/Approval";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import Login from "./pages/Login";
+import RequireAuth from "@/components/RequireAuth";
 
 const queryClient = new QueryClient();
 
@@ -20,15 +22,64 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <MainLayout>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/document-capture" element={<DocumentCapture />} />
-              <Route path="/approval" element={<Approval />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </MainLayout>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+
+            <Route
+              path="/"
+              element={
+                <RequireAuth>
+                  <MainLayout>
+                    <Index />
+                  </MainLayout>
+                </RequireAuth>
+              }
+            />
+
+            <Route
+              path="/document-capture"
+              element={
+                <RequireAuth>
+                  <MainLayout>
+                    <DocumentCapture />
+                  </MainLayout>
+                </RequireAuth>
+              }
+            />
+
+            <Route
+              path="/approval"
+              element={
+                <RequireAuth>
+                  <MainLayout>
+                    <Approval />
+                  </MainLayout>
+                </RequireAuth>
+              }
+            />
+
+            <Route
+              path="/settings"
+              element={
+                <RequireAuth>
+                  <MainLayout>
+                    <Settings />
+                  </MainLayout>
+                </RequireAuth>
+              }
+            />
+
+            <Route
+              path="*"
+              element={
+                <RequireAuth>
+                  <MainLayout>
+                    <NotFound />
+                  </MainLayout>
+                </RequireAuth>
+              }
+            />
+          </Routes>
         </BrowserRouter>
       </TooltipProvider>
     </ThemeProvider>
