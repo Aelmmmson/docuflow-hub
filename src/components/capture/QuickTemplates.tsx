@@ -17,7 +17,7 @@ const templates: Template[] = [
     icon: Receipt, 
     mostUsed: true,
     documentType: "expense",
-    defaultDescription: "Monthly expense report submission",
+    defaultDescription: "Expense report submission",
   },
   { 
     id: "invoice",
