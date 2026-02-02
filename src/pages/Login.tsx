@@ -1,30 +1,122 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { login } from "@/lib/auth";
 import { User, Key, Eye, EyeOff, Shield } from "lucide-react";
 import { motion } from "framer-motion";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import axios from "axios";
+import { login } from "@/lib/auth"; // ← updated import – uses real auth
+
+// API configuration – relative path (uses Vite proxy)
+const api = axios.create({
+  baseURL: "/v1/api/dms",
+  withCredentials: true,
+  headers: {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+  },
+});
+
+type LoginResponse = {
+  result: string;
+  user?: Array<{
+    user_id: number;
+    first_name: string;
+    last_name: string;
+    employee_id: string;
+    email: string;
+    role_id: number;
+    role_name: string;
+  }>;
+  accessToken?: string;
+  code: string;
+};
 
 export default function Login() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const navigate = useNavigate();
   const location = useLocation();
 
-  type LocationState = { from?: { pathname?: string } } | null;
-  const from = (location.state as LocationState)?.from?.pathname || "/";
+  // const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname || "/";
+  const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname || "/";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // simulate auth
-    setTimeout(() => {
-      login(identifier || "user");
+    setError(null);
+
+    const trimmed = identifier.trim();
+
+    if (!trimmed) {
+      setError("Please enter your email");
       setLoading(false);
-      navigate(from, { replace: true });
-    }, 700);
+      return;
+    }
+
+    const payload = {
+      email: trimmed,
+      password,
+    };
+
+    try {
+      console.log("[LOGIN] Sending request →", payload);
+
+      const res = await api.post<LoginResponse>("/user/login", payload);
+
+      console.log("[LOGIN] Response status:", res.status);
+      console.log("[LOGIN] Response data:", res.data);
+
+      if (res.data.code !== "200") {
+        throw new Error(res.data.result || "Login failed");
+      }
+
+      const { accessToken, user } = res.data;
+
+      if (!accessToken) {
+        throw new Error("No access token received");
+      }
+
+      if (!user || user.length === 0) {
+        console.warn("[LOGIN] No user data in response");
+      }
+
+      // Save real token + user data using the updated auth helper
+      login(accessToken, user[0]);
+
+      console.log("[LOGIN] Auth state saved successfully");
+      console.log("[LOGIN] Navigating to:", from);
+
+      navigate(from, { replace: true });   // ← now goes to "/" if no from
+    } catch (err: unknown) {
+      let message = "Something went wrong. Please try again.";
+
+      if (err instanceof Error) {
+        message = err.message;
+      }
+
+      if (axios.isAxiosError(err)) {
+        const axiosErr = err as import("axios").AxiosError;
+        const status = axiosErr.response?.status;
+        const data = axiosErr.response?.data as { result?: string } | undefined;
+
+        if (status === 401) {
+          message = data?.result || "Incorrect email or password";
+        } else if (status === 400 || status === 500) {
+          message = data?.result || "Server error – please try later";
+        } else if (data?.result) {
+          message = data.result;
+        }
+      }
+
+      setError(message);
+      console.error("[LOGIN] Error:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -34,14 +126,13 @@ export default function Login() {
         <ThemeToggle />
       </div>
 
-      {/* Left Column - Video Background (40% width) */}
+      {/* Left Column - Video & Marketing */}
       <motion.div
         initial={{ opacity: 0, x: -50 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.6 }}
         className="hidden lg:flex lg:w-[40%] flex-col p-12 pl-16 relative overflow-hidden"
       >
-        {/* Video Background */}
         <div className="absolute inset-0">
           <video
             autoPlay
@@ -51,28 +142,21 @@ export default function Login() {
             className="absolute inset-0 w-full h-full object-cover"
           >
             <source src="/xdms.mp4" type="video/mp4" />
-            {/* Fallback image if video doesn't load */}
-            <img 
-              src="/usg-logo-O.png" 
-              alt="Fallback background" 
+            <img
+              src="/usg-logo-O.png"
+              alt="Fallback background"
               className="absolute inset-0 w-full h-full object-cover"
             />
           </video>
-          
-          {/* Gradient Overlay - Using original colors with transparency */}
           <div className="absolute inset-0 bg-gradient-to-br from-emerald-600/70 via-emerald-500/65 to-teal-500/70 backdrop-blur-[0.2px]" />
-          
-          {/* Additional dark overlay for better contrast */}
           <div className="absolute inset-0 bg-black/30" />
         </div>
 
-        {/* Background blur effects */}
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-20 left-10 w-64 h-64 bg-white rounded-full blur-3xl" />
           <div className="absolute bottom-20 right-10 w-48 h-48 bg-white rounded-full blur-3xl" />
         </div>
 
-        {/* Top content */}
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-3 bg-white/60 rounded-full backdrop-blur-sm">
@@ -87,20 +171,16 @@ export default function Login() {
           </p>
         </div>
 
-        {/* Features list */}
         <div className="relative z-10 space-y-8 mt-20">
           <div className="flex items-start gap-4">
             <span className="flex-none mt-1 inline-block w-3 h-3 bg-emerald-300 rounded-full shadow-sm" />
             <div>
-              <h3 className="text-white font-semibold">
-                Fast document capture
-              </h3>
+              <h3 className="text-white font-semibold">Fast document capture</h3>
               <p className="text-white/70 text-sm">
                 Upload or scan documents quickly and classify automatically.
               </p>
             </div>
           </div>
-
           <div className="flex items-start gap-4">
             <span className="flex-none mt-1 inline-block w-3 h-3 bg-amber-300 rounded-full shadow-sm" />
             <div>
@@ -110,13 +190,10 @@ export default function Login() {
               </p>
             </div>
           </div>
-
           <div className="flex items-start gap-4">
             <span className="flex-none mt-1 inline-block w-3 h-3 bg-blue-300 rounded-full shadow-sm" />
             <div>
-              <h3 className="text-white font-semibold">
-                Secure access controls
-              </h3>
+              <h3 className="text-white font-semibold">Secure access controls</h3>
               <p className="text-white/70 text-sm">
                 Role-based permissions and activity logs for compliance.
               </p>
@@ -125,29 +202,26 @@ export default function Login() {
         </div>
       </motion.div>
 
-      {/* Right Column - Form (60% width) */}
+      {/* Right Column - Login Form */}
       <div className="flex-1 lg:w-[60%] flex items-center justify-center p-4 lg:p-6 pt-10 lg:pt-6">
         <div className="w-full max-w-lg">
           <motion.div
             initial={{ opacity: 0, x: 50 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6 }}
-            className="animate-fade-in"
             style={{ animationDelay: "200ms" }}
           >
             <div className="relative w-full h-80 lg:h-72 shadow-lg hover:shadow-2xl transition-shadow duration-300 rounded-2xl">
-              {/* Folder tab on TOP RIGHT (decorative) */}
+              {/* Decorative folder elements */}
               <div
                 className="work-5 bg-gradient-to-r from-emerald-300 to-emerald-300 w-full h-full rounded-2xl rounded-tr-none relative 
                 after:absolute after:content-[''] after:bottom-[99%] after:right-0 after:w-32 after:h-4 after:bg-gradient-to-r after:from-emerald-300 after:to-emerald-300 after:rounded-t-2xl 
                 before:absolute before:content-[''] before:-top-[14px] before:right-[123px] before:w-4 before:h-4 before:bg-gradient-to-r before:from-emerald-300 before:to-emerald-300 before:[clip-path:polygon(100%_35%,100%_100%,50%_100%)]"
               />
 
-              {/* File layers */}
               <div className="work-4 absolute inset-1 bg-emerald-50 dark:bg-emerald-900/30 rounded-2xl" />
               <div className="work-2 absolute inset-1 bg-emerald-100 dark:bg-emerald-800/40 rounded-2xl" />
 
-              {/* Main folder body - with extension on top left */}
               <div
                 className="work-1 absolute bottom-0 bg-gradient-to-t from-emerald-50 to-white dark:from-emerald-950/50 dark:to-card w-full h-[calc(100%-16px)] rounded-2xl rounded-tl-none overflow-hidden
                 after:absolute after:content-[''] after:bottom-[99%] after:left-0 after:w-[80%] after:h-[16px] after:bg-white dark:after:bg-card after:rounded-t-2xl 
@@ -155,36 +229,40 @@ export default function Login() {
               >
                 <div className="absolute inset-0 p-6 flex flex-col z-10 justify-center">
                   <div className="flex justify-between items-center mb-3">
-                    <h2 className="text-base font-bold text-foreground">
-                      Sign In
-                    </h2>
-                    <span className="text-sm bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 px-2 py-1 rounded-full inline-flex items-center gap-1 shadow-sm transition-transform transform hover:-translate-y-0.5 hover:scale-105">
+                    <h2 className="text-base font-bold text-foreground">Sign In</h2>
+                    <span className="text-sm bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 px-2 py-1 rounded-full inline-flex items-center gap-1 shadow-sm">
                       <Shield className="w-3 h-3 text-emerald-700" />
                       <span className="hidden sm:inline">Secure</span>
                     </span>
                   </div>
 
                   <p className="text-sm text-muted-foreground mb-4">
-                    Fill in your Employee ID or Email and password to continue.
+                    Fill in your Email and password to continue.
                   </p>
+
+                  {error && (
+                    <div className="mb-2 font-bold dark:border-red-800 text-red-800 dark:text-red-200 text-xs">
+                      {error}
+                    </div>
+                  )}
 
                   <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
                     <div className="relative">
-                      <label className="sr-only">Employee ID or Email</label>
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <User className="w-4 h-4 text-muted-foreground" />
                       </div>
                       <input
                         value={identifier}
                         onChange={(e) => setIdentifier(e.target.value)}
-                        placeholder="Employee ID or Email"
-                        className="w-full pl-10 pr-3 py-2 rounded-md border border-border bg-card text-foreground placeholder:text-muted-foreground"
+                        placeholder="Email"
+                        type="email"
+                        autoComplete="email"
+                        className="w-full pl-10 pr-3 py-2 rounded-md border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         required
                       />
                     </div>
 
                     <div className="relative">
-                      <label className="sr-only">Password</label>
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <Key className="w-4 h-4 text-muted-foreground" />
                       </div>
@@ -193,30 +271,26 @@ export default function Login() {
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Password"
                         type={showPassword ? "text" : "password"}
-                        className="w-full pl-10 pr-10 py-2 rounded-md border border-border bg-card text-foreground placeholder:text-muted-foreground"
+                        autoComplete="current-password"
+                        className="w-full pl-10 pr-10 py-2 rounded-md border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         required
                       />
                       <button
                         type="button"
-                        onClick={() => setShowPassword((s) => !s)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
-                        aria-label={
-                          showPassword ? "Hide password" : "Show password"
-                        }
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       >
-                        {showPassword ? (
-                          <EyeOff className="w-4 h-4" />
-                        ) : (
-                          <Eye className="w-4 h-4" />
-                        )}
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
 
-                    <div className="flex justify-end mt-1">
+                    <div className="flex justify-end mt-2">
                       <button
                         type="submit"
-                        className="inline-flex items-center px-4 py-2 rounded-md bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 active:translate-y-[1px] shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-60"
                         disabled={loading}
+                        className={`px-6 py-2 rounded-md bg-emerald-600 text-white font-medium shadow-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all ${
+                          loading ? "opacity-60 cursor-not-allowed" : "hover:shadow-lg active:translate-y-px"
+                        }`}
                       >
                         {loading ? "Signing in..." : "Sign In"}
                       </button>
@@ -224,8 +298,9 @@ export default function Login() {
                   </form>
                 </div>
               </div>
-              <p className="text-foreground/60 text-center italic text-sm relative z-10 mt-20 animate-pulse">
-                Powered by <span className="font-extrabold">x100</span>
+
+              <p className="text-center text-sm text-muted-foreground/80 mt-6 italic">
+                Powered by <span className="font-semibold">x100</span>
               </p>
             </div>
           </motion.div>

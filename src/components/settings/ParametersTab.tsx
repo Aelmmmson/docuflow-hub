@@ -1,13 +1,10 @@
-/**
- * ParametersTab Component
- * =======================
- * Settings tab for managing document types/parameters.
- */
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Edit2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Check, ChevronsUpDown } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -20,55 +17,137 @@ import {
 import { SearchFilter } from "@/components/shared/SearchFilter";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { ActionMenu } from "@/components/shared/ActionMenu";
 import { RightAside } from "@/components/shared/RightAside";
 import { useToast } from "@/hooks/use-toast";
+import api from "@/lib/api";
+import { getCurrentUser } from "@/lib/auth";
+
+// ────────────────────────────────────────────────
+//  Types
+// ────────────────────────────────────────────────
 
 interface DocumentType {
-  id: string;
+  id: number;
   code: string;
   description: string;
-  isTransactional: boolean;
-  status: "Active" | "Inactive";
+  trans_type: number; // 1 = transactional, 0 = non-transactional
+  expense_code: string | null;
+  account_number: string | null;
+  account_desc: string | null;
+  status: string; // "Active" | "Inactive" (after mapping)
 }
 
-// Mock data
-const mockDocumentTypes: DocumentType[] = [
-  { id: "DOC001", code: "DOCS", description: "Electric Expenses", isTransactional: true, status: "Active" },
-  { id: "DOC002", code: "DOCS", description: "Newspaper Expense", isTransactional: false, status: "Active" },
-  { id: "DOC003", code: "DOCS", description: "Travel Reimbursement", isTransactional: true, status: "Active" },
-  { id: "DOC004", code: "DOCS", description: "Office Supplies", isTransactional: false, status: "Inactive" },
-  { id: "DOC005", code: "DOCS", description: "Invoice Payment", isTransactional: true, status: "Active" },
+interface ExpenseAccount {
+  TACCT: string;
+  ACCOUNT_DESCRP: string;
+}
+
+// Mock data (unchanged)
+const mockExpenseAccounts: ExpenseAccount[] = [
+  { TACCT: "610000000001", ACCOUNT_DESCRP: "Office Supplies Expense" },
+  { TACCT: "610000000002", ACCOUNT_DESCRP: "Travel & Accommodation" },
+  { TACCT: "610000000003", ACCOUNT_DESCRP: "Marketing & Advertising" },
+  { TACCT: "620000000001", ACCOUNT_DESCRP: "Professional Services" },
+  { TACCT: "620000000002", ACCOUNT_DESCRP: "Training & Development" },
 ];
 
 export function ParametersTab() {
   const { toast } = useToast();
-  const [documentTypes, setDocumentTypes] = useState<DocumentType[]>(mockDocumentTypes);
+  const currentUser = getCurrentUser();
+
+  const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
+  const [expenseAccounts, setExpenseAccounts] = useState<ExpenseAccount[]>(mockExpenseAccounts);
+  const [loading, setLoading] = useState(true);
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  // Aside state
+  // Aside / Form state
   const [isAsideOpen, setIsAsideOpen] = useState(false);
   const [editingType, setEditingType] = useState<DocumentType | null>(null);
 
-  // Form state
+  // Form fields
   const [description, setDescription] = useState("");
   const [isTransactional, setIsTransactional] = useState(false);
+  const [accountNumber, setAccountNumber] = useState("");
+  const [accountDesc, setAccountDesc] = useState("");
   const [status, setStatus] = useState<string>("Active");
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // New state for searchable combobox
+  const [openAccountCombobox, setOpenAccountCombobox] = useState(false);
+  const [accountSearch, setAccountSearch] = useState("");
+
+  // Filter accounts based on search
+  const filteredAccounts = expenseAccounts.filter((acct) =>
+    `${acct.TACCT} ${acct.ACCOUNT_DESCRP}`
+      .toLowerCase()
+      .includes(accountSearch.toLowerCase().trim())
+  );
+
+  const handleAccountSelect = (acct: ExpenseAccount) => {
+    setAccountNumber(acct.TACCT);
+    setAccountDesc(acct.ACCOUNT_DESCRP);
+    setAccountSearch("");
+    setOpenAccountCombobox(false);
+  };
+
+  // Fetch data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+
+        // Fetch document types
+        const doctypesRes = await api.get<{ documents: DocumentType[] }>("/get-doc-types");
+        if (doctypesRes.data.documents) {
+          const mapped = doctypesRes.data.documents.map((dt) => ({
+            ...dt,
+            status: dt.status === "1" ? "Active" : "Inactive",
+          }));
+          setDocumentTypes(mapped);
+        }
+
+        setExpenseAccounts(mockExpenseAccounts);
+      } catch (err: unknown) {
+        console.error("Fetch failed:", err);
+        toast({
+          title: "Error",
+          description: "Could not load parameters or accounts. Using mock data.",
+          variant: "destructive",
+        });
+        setExpenseAccounts(mockExpenseAccounts);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [toast]);
 
   const filteredTypes = documentTypes.filter((type) => {
     const matchesSearch =
       type.description.toLowerCase().includes(searchValue.toLowerCase()) ||
-      type.code.toLowerCase().includes(searchValue.toLowerCase()) ||
-      type.id.toLowerCase().includes(searchValue.toLowerCase());
+      type.code.toLowerCase().includes(searchValue.toLowerCase());
     const matchesStatus = statusFilter === "all" || type.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  // Pagination logic
+  const totalItems = filteredTypes.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+  const paginatedTypes = filteredTypes.slice(startIndex, endIndex);
 
   const handleAddNew = () => {
     setEditingType(null);
     setDescription("");
     setIsTransactional(false);
+    setAccountNumber("");
+    setAccountDesc("");
     setStatus("Active");
     setIsAsideOpen(true);
   };
@@ -76,66 +155,84 @@ export function ParametersTab() {
   const handleEdit = (type: DocumentType) => {
     setEditingType(type);
     setDescription(type.description);
-    setIsTransactional(type.isTransactional);
+    setIsTransactional(type.trans_type === 1);
+    setAccountNumber(type.account_number || "");
+    setAccountDesc(type.account_desc || "");
     setStatus(type.status);
     setIsAsideOpen(true);
   };
 
-  const handleSave = () => {
-    if (!description.trim()) {
+  const handleSave = async () => {
+    if (!description) {
       toast({
         title: "Validation Error",
-        description: "Please enter a description.",
+        description: "Please fill in description.",
         variant: "destructive",
       });
       return;
     }
 
-    if (editingType) {
-      // Update existing
-      setDocumentTypes((prev) =>
-        prev.map((t) =>
-          t.id === editingType.id
-            ? {
-                ...t,
-                description,
-                isTransactional,
-                status: status as DocumentType["status"],
-              }
-            : t
-        )
-      );
+    const payload = {
+      description,
+      trans_type: isTransactional ? "1" : "0",
+      expense_code: "",
+      account_number: isTransactional ? accountNumber : null,
+      account_desc: isTransactional ? accountDesc : null,
+      status: status === "Active" ? "1" : "0",
+      posted_by: currentUser?.user_id || 1,
+      code_id: 2,
+      id: editingType?.id || null,
+    };
+
+    try {
+      if (editingType) {
+        await api.put(`/update-doc-type`, payload);
+        toast({ title: "Success", description: "Parameter updated." });
+      } else {
+        await api.post("/add-doc-type", payload);
+        toast({ title: "Success", description: "Parameter added." });
+      }
+
+      // Refresh list
+      const res = await api.get<{ documents: DocumentType[] }>("/get-doc-types");
+      if (res.data.documents) {
+        const mapped = res.data.documents.map((dt) => ({
+          ...dt,
+          status: dt.status === "1" ? "Active" : "Inactive",
+        }));
+        setDocumentTypes(mapped);
+      }
+
+      setIsAsideOpen(false);
+    } catch (err: unknown) {
+      console.error("Save failed:", err);
       toast({
-        title: "Parameter Updated",
-        description: `${description} has been updated successfully.`,
-      });
-    } else {
-      // Add new
-      const newType: DocumentType = {
-        id: `DOC${String(documentTypes.length + 1).padStart(3, "0")}`,
-        code: "DOCS",
-        description,
-        isTransactional,
-        status: status as DocumentType["status"],
-      };
-      setDocumentTypes((prev) => [...prev, newType]);
-      toast({
-        title: "Parameter Added",
-        description: `${description} has been added successfully.`,
+        title: "Error",
+        description: "Failed to save parameter.",
+        variant: "destructive",
       });
     }
-
-    setIsAsideOpen(false);
   };
 
   const columns: Column<DocumentType>[] = [
-    { key: "id", header: "ID", className: "w-20" },
-    { key: "code", header: "Code", className: "w-20" },
+    { key: "code", header: "Code" },
     { key: "description", header: "Description" },
     {
-      key: "isTransactional",
-      header: "Transactional?",
-      render: (type) => <StatusBadge status={type.isTransactional ? "Yes" : "No"} />,
+      key: "trans_type",
+      header: "Type",
+      render: (type) => {
+        const value = String(type.trans_type);
+        const label =
+          value === "1" ? "Transactional" :
+          value === "0" ? "Non-Transactional" :
+          "Unknown";
+        return <span className="text-sm font-medium">{label}</span>;
+      },
+    },
+    {
+      key: "account_number",
+      header: "Account Number",
+      render: (type) => type.account_number || "—",
     },
     {
       key: "status",
@@ -144,30 +241,44 @@ export function ParametersTab() {
     },
     {
       key: "actions",
-      header: "",
-      className: "w-12",
+      header: "Action",
+      className: "w-16",
       render: (type) => (
-        <ActionMenu
-          actions={[
-            {
-              label: "Edit",
-              icon: <Edit2 className="h-3 w-3" />,
-              onClick: () => handleEdit(type),
-            },
-          ]}
-        />
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={() => handleEdit(type)}
+          title="Edit parameter"
+        >
+          <Edit2 className="h-4 w-4" />
+        </Button>
       ),
     },
   ];
 
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  // Handle items per page change
+  const handleItemsPerPageChange = (value: string) => {
+    const newItemsPerPage = parseInt(value, 10);
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1);
+  };
+
   return (
     <div className="space-y-4">
-      {/* Header with Add Button */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <SearchFilter
           searchValue={searchValue}
           onSearchChange={setSearchValue}
-          searchPlaceholder="Search document types..."
+          searchPlaceholder="Search parameters..."
           filters={[
             {
               key: "status",
@@ -188,17 +299,102 @@ export function ParametersTab() {
         </Button>
       </div>
 
-      {/* Data Table */}
+      {/* Table */}
       <div className="rounded-lg border border-border bg-card">
         <DataTable
-          data={filteredTypes}
+          data={paginatedTypes}
           columns={columns}
-          keyExtractor={(type) => type.id}
-          emptyMessage="No document types found"
+          keyExtractor={(type) => type.id.toString()}
+          emptyMessage={loading ? "Loading parameters..." : "No parameters found"}
+          isLoading={loading}
         />
+        
+        {/* Pagination Controls */}
+        {filteredTypes.length > 0 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+              <span>Rows per page:</span>
+              <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
+                <SelectTrigger className="h-8 w-[70px]">
+                  <SelectValue placeholder={itemsPerPage} />
+                </SelectTrigger>
+                <SelectContent>
+                  {[5, 10, 20, 50].map((size) => (
+                    <SelectItem key={size} value={size.toString()}>
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span>
+                {startIndex + 1}-{endIndex} of {totalItems}
+              </span>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </Button>
+              
+              <div className="flex items-center space-x-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? "default" : "outline"}
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={() => handlePageChange(pageNum)}
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+                
+                {totalPages > 5 && currentPage < totalPages - 2 && (
+                  <>
+                    <span className="px-1">...</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={() => handlePageChange(totalPages)}
+                    >
+                      {totalPages}
+                    </Button>
+                  </>
+                )}
+              </div>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Right Aside Panel */}
       <RightAside
         isOpen={isAsideOpen}
         onClose={() => setIsAsideOpen(false)}
@@ -216,18 +412,17 @@ export function ParametersTab() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Enter description"
-              className="h-9"
             />
           </div>
 
-          {/* Is Transactional Toggle */}
-          <div className="flex items-center justify-between rounded-lg border border-border p-3">
-            <div>
+          {/* Transactional Switch */}
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
               <Label htmlFor="transactional" className="text-xs font-medium">
-                Is this a transactional type of document?
+                Transactional type?
               </Label>
               <p className="text-[10px] text-muted-foreground mt-0.5">
-                Enable if this document type involves financial transactions
+                Enable for financial transactions
               </p>
             </div>
             <Switch
@@ -236,6 +431,70 @@ export function ParametersTab() {
               onCheckedChange={setIsTransactional}
             />
           </div>
+
+          {/* Account field – now searchable combobox */}
+          {isTransactional && (
+            <div className="space-y-2">
+              <Label htmlFor="account" className="text-xs font-medium">
+                Select Account <span className="text-destructive">*</span>
+              </Label>
+
+              <Popover open={openAccountCombobox} onOpenChange={setOpenAccountCombobox}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openAccountCombobox}
+                    className="w-full justify-between text-left font-normal"
+                  >
+                    {accountNumber && accountDesc
+                      ? `${accountDesc} (${accountNumber})`
+                      : "Search account number or description..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder="Type to search accounts..."
+                      value={accountSearch}
+                      onValueChange={setAccountSearch}
+                      className="h-9"
+                    />
+                    <CommandList>
+                      <CommandEmpty>No accounts found.</CommandEmpty>
+                      <CommandGroup>
+                        {filteredAccounts.map((acct) => (
+                          <CommandItem
+                            key={acct.TACCT}
+                            value={acct.TACCT}
+                            onSelect={() => handleAccountSelect(acct)}
+                            className="text-sm"
+                          >
+                            <Check
+                              className={`mr-2 h-4 w-4 ${
+                                acct.TACCT === accountNumber ? "opacity-100" : "opacity-0"
+                              }`}
+                            />
+                            <div className="flex flex-col">
+                              <span>{acct.ACCOUNT_DESCRP}</span>
+                              <span className="text-xs text-muted-foreground">{acct.TACCT}</span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+              {accountNumber && (
+                <p className="text-xs text-muted-foreground">
+                  Selected: {accountDesc} • {accountNumber}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Status */}
           <div className="space-y-2">

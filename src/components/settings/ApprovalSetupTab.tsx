@@ -4,7 +4,7 @@
  * Settings tab for managing document approval workflows with multi-stage wizard.
  */
 
-import { useState } from "react";
+import { useState,useEffect } from "react";
 import { Plus, Edit2, Save, ChevronLeft, ChevronRight, Check, Users, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,46 +30,63 @@ import { DataTable, Column } from "@/components/shared/DataTable";
 import { RightAside } from "@/components/shared/RightAside";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import api from "@/lib/api";
+import { getCurrentUser } from "@/lib/auth";
 
 interface ApprovalStage {
-  description: string;
+  name: string;
   quorum: number;
   approvers: string[];
   mandatoryApprovers: string[];
 }
 
-interface ApprovalSetup {
+interface DocumentType {
   id: string;
-  documentType: string;
-  stages: ApprovalStage[];
-  approversCount: number;
-  requiredApproversCount: number;
+  description: string;
+  trans_type:string;
+}
+
+// interface ApprovalSetup {
+//   id: string;
+//   documentType: string;
+//   stages: ApprovalStage[];
+//   approversCount: number;
+//   requiredApproversCount: number;
+// }
+interface ApprovalSetup {
+  approval_stages: number;
+  id: number;
+  description: string,
+  doctype_id: number,
+  number_of_approvers: number,
+  mandatory_approvers: number,
+  details: [{name: string; quorum: string; approvers: {userId: number; name: string; isMandatory: boolean}[] }];
 }
 
 // Mock data
-const mockApprovalSetups: ApprovalSetup[] = [
-  {
-    id: "APR001",
-    documentType: "Electric Expenses",
-    stages: [
-      { description: "Manager Review", quorum: 1, approvers: ["John Doe", "Jane Smith"], mandatoryApprovers: ["John Doe"] },
-      { description: "Finance Approval", quorum: 2, approvers: ["Alice Brown", "Bob Wilson", "Charlie Davis"], mandatoryApprovers: ["Alice Brown"] },
-    ],
-    approversCount: 5,
-    requiredApproversCount: 2,
-  },
-  {
-    id: "APR002",
-    documentType: "Travel Reimbursement",
-    stages: [
-      { description: "Supervisor Check", quorum: 1, approvers: ["Jane Smith"], mandatoryApprovers: ["Jane Smith"] },
-      { description: "HR Review", quorum: 1, approvers: ["Bob Wilson", "Charlie Davis"], mandatoryApprovers: [] },
-      { description: "Finance Sign-off", quorum: 1, approvers: ["Alice Brown"], mandatoryApprovers: ["Alice Brown"] },
-    ],
-    approversCount: 4,
-    requiredApproversCount: 3,
-  },
-];
+// const mockApprovalSetups: ApprovalSetup[] = [
+//   {
+//     id: "APR001",
+//     documentType: "Electric Expenses",
+//     stages: [
+//       { name: "Manager Review", quorum: 1, approvers: ["John Doe", "Jane Smith"], mandatoryApprovers: ["John Doe"] },
+//       { name: "Finance Approval", quorum: 2, approvers: ["Alice Brown", "Bob Wilson", "Charlie Davis"], mandatoryApprovers: ["Alice Brown"] },
+//     ],
+//     approversCount: 5,
+//     requiredApproversCount: 2,
+//   },
+//   {
+//     id: "APR002",
+//     documentType: "Travel Reimbursement",
+//     stages: [
+//       { name: "Supervisor Check", quorum: 1, approvers: ["Jane Smith"], mandatoryApprovers: ["Jane Smith"] },
+//       { name: "HR Review", quorum: 1, approvers: ["Bob Wilson", "Charlie Davis"], mandatoryApprovers: [] },
+//       { name: "Finance Sign-off", quorum: 1, approvers: ["Alice Brown"], mandatoryApprovers: ["Alice Brown"] },
+//     ],
+//     approversCount: 4,
+//     requiredApproversCount: 3,
+//   },
+// ];
 
 const mockDocumentTypes = [
   "Electric Expenses",
@@ -90,8 +107,10 @@ const mockApprovers = [
 ];
 
 export function ApprovalSetupTab() {
+
+  const currentUser = getCurrentUser();
   const { toast } = useToast();
-  const [setups, setSetups] = useState<ApprovalSetup[]>(mockApprovalSetups);
+  const [setups, setSetups] = useState<ApprovalSetup[]>([]);
   const [searchValue, setSearchValue] = useState("");
 
   // Aside state
@@ -105,17 +124,22 @@ export function ApprovalSetupTab() {
   // Wizard state
   const [currentStep, setCurrentStep] = useState(0); // 0 = config, 1+ = stages
   const [documentType, setDocumentType] = useState("");
+  const [availableDocumentTypes, setAvailableDocumentTypes] = useState<DocumentType[]>([]);
   const [numberOfStages, setNumberOfStages] = useState(1);
   const [stages, setStages] = useState<ApprovalStage[]>([]);
 
+  //for approvers
+  const [availableApprovers, setAvailableApprovers] = useState<{ userId: string; name: string }[]>([]);
+
   const filteredSetups = setups.filter((setup) =>
-    setup.documentType.toLowerCase().includes(searchValue.toLowerCase()) ||
-    setup.id.toLowerCase().includes(searchValue.toLowerCase())
+    setup.description.toLowerCase().includes(searchValue.toLowerCase())
+    // setup.id.toLowerCase().includes(searchValue.toLowerCase())
+    // setup.id.includes(searchValue)
   );
 
   const initializeStages = (count: number) => {
     const newStages: ApprovalStage[] = Array.from({ length: count }, () => ({
-      description: "",
+      name: "",
       quorum: 1,
       approvers: [],
       mandatoryApprovers: [],
@@ -128,16 +152,16 @@ export function ApprovalSetupTab() {
     setCurrentStep(0);
     setDocumentType("");
     setNumberOfStages(1);
-    setStages([{ description: "", quorum: 1, approvers: [], mandatoryApprovers: [] }]);
+    setStages([{ name: "", quorum: 1, approvers: [], mandatoryApprovers: [] }]);
     setIsAsideOpen(true);
   };
 
   const handleEdit = (setup: ApprovalSetup) => {
     setEditingSetup(setup);
     setCurrentStep(0);
-    setDocumentType(setup.documentType);
-    setNumberOfStages(setup.stages.length);
-    setStages([...setup.stages]);
+    setDocumentType(setup.description);
+    // setNumberOfStages(setup.stages.length);
+    // setStages([...setup.stages]);
     setIsAsideOpen(true);
   };
 
@@ -165,10 +189,10 @@ export function ApprovalSetupTab() {
     if (currentStep > 0) {
       const stageIndex = currentStep - 1;
       const stage = stages[stageIndex];
-      if (!stage.description) {
+      if (!stage.name) {
         toast({
           title: "Validation Error",
-          description: "Please enter a stage description.",
+          description: "Please enter a stage name.",
           variant: "destructive",
         });
         return;
@@ -207,11 +231,11 @@ export function ApprovalSetupTab() {
     setCurrentStep((prev) => Math.max(prev - 1, 0));
   };
 
-  const handleSaveAll = () => {
+  const handleSaveAll = async () =>  {
     // Validate last stage
     const lastStageIndex = currentStep - 1;
     const lastStage = stages[lastStageIndex];
-    if (!lastStage?.description || lastStage.approvers.length === 0) {
+    if (!lastStage?.name || lastStage.approvers.length === 0) {
       toast({
         title: "Validation Error",
         description: "Please complete all stage fields.",
@@ -233,6 +257,28 @@ export function ApprovalSetupTab() {
     const totalApprovers = stages.reduce((acc, s) => acc + s.approvers.length, 0);
     const totalMandatory = stages.reduce((acc, s) => acc + s.mandatoryApprovers.length, 0);
 
+    const payload = {
+      posted_by: currentUser?.user_id || 1,
+      doctype_id: documentType, // or parseInt(documentType) if it needs to be a number
+      stages: stages.map((stage) => ({
+        name: stage.name,
+        quorum: stage.quorum.toString(), // Convert to string as per your example
+        approvers: stage.approvers.map((approverName) => {
+          // Find the approver object from availableApprovers
+          const approver = availableApprovers.find((a) => a.name === approverName);
+          return {
+            userId: parseInt(approver?.userId || "0"), // Convert to number
+            name: approverName,
+            isMandatory: stage.mandatoryApprovers.includes(approverName),
+          };
+        }),
+      })),
+    };
+
+
+      console.log("Payload to save:", payload);
+    
+
     if (editingSetup) {
       setSetups((prev) =>
         prev.map((s) =>
@@ -252,19 +298,13 @@ export function ApprovalSetupTab() {
         description: `${documentType} workflow has been updated.`,
       });
     } else {
-      const newSetup: ApprovalSetup = {
-        id: `APR${String(setups.length + 1).padStart(3, "0")}`,
-        documentType,
-        stages,
-        approversCount: totalApprovers,
-        requiredApproversCount: totalMandatory,
-      };
-      setSetups((prev) => [...prev, newSetup]);
-      toast({
-        title: "Approval Setup Created",
-        description: `${documentType} workflow has been created.`,
-      });
+      
+      await api.post("/create-doc-approvers-setup", payload);
+      toast({ title: "Success", description: "Approval setup created." });
     }
+
+    // Refetch the setups to get updated data
+    await fetchApprovalSetups();
 
     setIsAsideOpen(false);
   };
@@ -312,27 +352,80 @@ export function ApprovalSetupTab() {
     });
   };
 
+  //get available document types excluding the ones already used
+  useEffect(() => {
+    const fetchAvailableDocumentTypes = async () => {
+      try {
+        const availableDoctypesRes = await api.get<{ documents: DocumentType[] }>("/get-available-doc-types");
+        const availableTypes = availableDoctypesRes.data.documents;
+        // const availableTypes = mockDocumentTypes.filter((type) => !usedTypes.includes(type) || (editingSetup && editingSetup.documentType === type));
+        setAvailableDocumentTypes(availableTypes);
+      } catch (err) {
+        console.error("Failed to fetch available document types:", err);
+      }
+    };
+
+    fetchAvailableDocumentTypes();
+  }, [setups, editingSetup]);
+
+
+  //get approvers from api
+  useEffect(() => {
+    const fetchApprovers = async () => {
+      try {
+        const approversRes = await api.get<{ approvers: { userId: string; name: string }[] }>("/get-approver-users");
+        const approversData = approversRes.data.approvers;
+        setAvailableApprovers(approversData);
+      } catch (err) {
+        console.error("Failed to fetch approvers:", err);
+      }
+    };
+    fetchApprovers();
+  }, []);
+
+
+  //get doc approval setups from api
+  const fetchApprovalSetups = async () => {
+      try {
+        const setupsRes = await api.get<{ setups: ApprovalSetup[] }>("/get-approver-setups");
+        const setupsData = setupsRes.data.setups;
+        setSetups(setupsData);
+      } catch (err) {
+        console.error("Failed to fetch approval setups:", err);
+      }
+  };
+
+  useEffect(() => {
+    fetchApprovalSetups();
+  }, []);
+
+
+
   const columns: Column<ApprovalSetup>[] = [
     { key: "id", header: "ID", className: "w-20" },
-    { key: "documentType", header: "Document Type" },
+    { 
+      key: "description", // Changed from "documentType" to "description"
+      header: "Document Type",
+      render: (setup) => <span>{setup.description}</span> // Explicitly render description
+    },
     {
       key: "stages",
       header: "Approval Stages",
       render: (setup) => (
         <Badge variant="secondary" className="text-xs">
-          {setup.stages.length} Stage{setup.stages.length > 1 ? "s" : ""}
+          {setup.approval_stages} Stage{setup.approval_stages > 1 ? "s" : ""}
         </Badge>
       ),
     },
     {
       key: "approversCount",
       header: "Approvers",
-      render: (setup) => <span className="text-xs">{setup.approversCount}</span>,
+      render: (setup) => <span className="text-xs">{setup.number_of_approvers}</span>,
     },
     {
       key: "requiredApproversCount",
       header: "Required",
-      render: (setup) => <span className="text-xs">{setup.requiredApproversCount}</span>,
+      render: (setup) => <span className="text-xs">{setup.mandatory_approvers}</span>,
     },
     {
       key: "actions",
@@ -421,9 +514,9 @@ export function ApprovalSetupTab() {
                     <SelectValue placeholder="Select document type" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockDocumentTypes.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
+                    {availableDocumentTypes.map((type) => (
+                      <SelectItem key={type.id} value={type.id}>
+                        {type.description}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -466,13 +559,13 @@ export function ApprovalSetupTab() {
 
               {/* Stage Description */}
               <div className="space-y-2">
-                <Label htmlFor="stageDesc" className="text-xs font-medium">
-                  Stage Description <span className="text-destructive">*</span>
+                <Label htmlFor="stageName" className="text-xs font-medium">
+                  Stage Name <span className="text-destructive">*</span>
                 </Label>
                 <Input
-                  id="stageDesc"
-                  value={stages[currentStep - 1].description}
-                  onChange={(e) => updateStage(currentStep - 1, { description: e.target.value })}
+                  id="stageName"
+                  value={stages[currentStep - 1].name}
+                  onChange={(e) => updateStage(currentStep - 1, { name: e.target.value })}
                   placeholder="e.g., Manager Review"
                   className="h-9"
                 />
@@ -517,11 +610,11 @@ export function ApprovalSetupTab() {
                   Select Approvers <span className="text-destructive">*</span>
                 </Label>
                 <div className="border border-border rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
-                  {mockApprovers.map((approver) => {
+                  {availableApprovers.map((approver) => {
                     const isSelected = stages[currentStep - 1].approvers.includes(approver.name);
                     return (
                       <div
-                        key={approver.id}
+                        key={approver.userId}
                         onClick={() => toggleApprover(currentStep - 1, approver.name)}
                         className={cn(
                           "flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors",
@@ -646,7 +739,7 @@ export function ApprovalSetupTab() {
         isOpen={isViewOpen}
         onClose={() => setIsViewOpen(false)}
         title="View Approval Setup"
-        subtitle={viewingSetup ? viewingSetup.documentType : ""}
+        subtitle={viewingSetup ? viewingSetup.description : ""}
       >
         {viewingSetup && (
           <div className="space-y-4">
@@ -657,39 +750,39 @@ export function ApprovalSetupTab() {
               </div>
               <div className="flex justify-between">
                 <span className="text-xs text-muted-foreground">Document Type</span>
-                <span className="text-xs font-medium">{viewingSetup.documentType}</span>
+                <span className="text-xs font-medium">{viewingSetup.description}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-xs text-muted-foreground">Total Approvers</span>
-                <span className="text-xs font-medium">{viewingSetup.approversCount}</span>
+                <span className="text-xs font-medium">{viewingSetup.number_of_approvers}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-xs text-muted-foreground">Required Approvers</span>
-                <span className="text-xs font-medium">{viewingSetup.requiredApproversCount}</span>
+                <span className="text-xs font-medium">{viewingSetup.mandatory_approvers}</span>
               </div>
             </div>
 
             <div className="space-y-3">
               <Label className="text-xs font-medium">Approval Stages</Label>
-              {viewingSetup.stages.map((stage, index) => (
+              {viewingSetup.details.map((stage, index) => (
                 <div key={index} className="rounded-lg border border-border p-3 space-y-2">
                   <div className="flex items-center gap-2">
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
                       {index + 1}
                     </div>
-                    <span className="text-xs font-medium">{stage.description}</span>
+                    <span className="text-xs font-medium">{stage.name}</span>
                   </div>
                   <div className="pl-8 space-y-1">
                     <p className="text-[10px] text-muted-foreground">Quorum: {stage.quorum}</p>
                     <div className="flex flex-wrap gap-1">
                       {stage.approvers.map((approver) => (
                         <Badge 
-                          key={approver} 
-                          variant={stage.mandatoryApprovers.includes(approver) ? "default" : "secondary"} 
+                          key={approver.userId} 
+                          variant={approver.isMandatory ? "default" : "secondary"} 
                           className="text-[10px]"
                         >
-                          {approver}
-                          {stage.mandatoryApprovers.includes(approver) && " *"}
+                          {approver.name}
+                          {approver.isMandatory && " *"}
                         </Badge>
                       ))}
                     </div>

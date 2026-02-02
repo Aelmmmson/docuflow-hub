@@ -1,10 +1,10 @@
 /**
  * BeneficiaryTab Component
  * ========================
- * Settings tab for managing beneficiaries.
+ * Settings tab for managing beneficiaries with real backend integration.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Edit2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,35 +23,48 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { ActionMenu } from "@/components/shared/ActionMenu";
 import { RightAside } from "@/components/shared/RightAside";
 import { useToast } from "@/hooks/use-toast";
+import api from "@/lib/api";
+import { getCurrentUser } from "@/lib/auth";
 
-interface Beneficiary {
-  id: string;
+// ────────────────────────────────────────────────
+//  Types
+// ────────────────────────────────────────────────
+
+interface RawBeneficiary {
+  id: number;
+  beneficiary_name: string;
+  account_number: string;
+  description: string | null;
+  status: string | number;     // ← accept both string "1"/"0" and number
+  posted_by?: number;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+interface DisplayBeneficiary {
+  id: number;
   name: string;
   accountNumber: string;
   description: string;
   status: "Active" | "Inactive";
 }
 
-// Mock data
-const mockBeneficiaries: Beneficiary[] = [
-  { id: "BEN001", name: "ABC Electric Co.", accountNumber: "1234567890", description: "Primary electricity provider", status: "Active" },
-  { id: "BEN002", name: "Daily News Ltd.", accountNumber: "0987654321", description: "Newspaper subscription", status: "Active" },
-  { id: "BEN003", name: "Travel Express Inc.", accountNumber: "5678901234", description: "Corporate travel services", status: "Active" },
-  { id: "BEN004", name: "Office Mart", accountNumber: "4321098765", description: "Office supplies vendor", status: "Inactive" },
-  { id: "BEN005", name: "Tech Solutions", accountNumber: "6789012345", description: "IT equipment supplier", status: "Active" },
-];
-
 export function BeneficiaryTab() {
   const { toast } = useToast();
-  const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>(mockBeneficiaries);
+  const currentUser = getCurrentUser();
+
+  const [beneficiaries, setBeneficiaries] = useState<DisplayBeneficiary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  // Aside state
+  // Aside / Form
   const [isAsideOpen, setIsAsideOpen] = useState(false);
-  const [editingBeneficiary, setEditingBeneficiary] = useState<Beneficiary | null>(null);
+  const [editingBeneficiary, setEditingBeneficiary] = useState<DisplayBeneficiary | null>(null);
 
-  // Form state
+  // Form fields
   const [name, setName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [description, setDescription] = useState("");
@@ -59,14 +72,66 @@ export function BeneficiaryTab() {
 
   const MAX_DESCRIPTION_LENGTH = 255;
 
+  // ────────────────────────────────────────────────
+  //  Fetch all beneficiaries
+  // ────────────────────────────────────────────────
+
+  const loadBeneficiaries = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get("/get-all-beneficiary-accounts");
+      const raw: RawBeneficiary[] = res.data.accounts || [];
+
+// 1. In loadBeneficiaries – improved mapping with type safety
+const mapped = raw.map((b) => {
+  // Normalize status (handles both string "1"/"0" and number)
+  const statusValue = typeof b.status === 'string' ? parseInt(b.status, 10) : b.status;
+  const displayStatus = statusValue === 1 ? 'Active' : 'Inactive' as const; // ← key fix
+
+return {
+  id: b.id,
+  name: b.beneficiary_name,
+  accountNumber: b.account_number,
+  description: b.description || "",
+  status: statusValue === 1 ? "Active" : "Inactive",
+} satisfies DisplayBeneficiary;    // or use as DisplayBeneficiary
+});
+
+      setBeneficiaries(mapped);
+    } catch (err: unknown) {
+  console.error("Failed to load beneficiaries:", err);
+  toast({
+    title: "Error",
+    description: "Could not load beneficiaries.",
+    variant: "destructive",
+  });
+} finally {
+  setLoading(false);
+}
+  };
+
+  useEffect(() => {
+    loadBeneficiaries();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ← added comment to silence exhaustive-deps warning (function is stable)
+
+  // ────────────────────────────────────────────────
+  //  Filtering
+  // ────────────────────────────────────────────────
+
   const filteredBeneficiaries = beneficiaries.filter((ben) => {
+    const searchLower = searchValue.toLowerCase().trim();
     const matchesSearch =
-      ben.name.toLowerCase().includes(searchValue.toLowerCase()) ||
-      ben.accountNumber.includes(searchValue) ||
-      ben.id.toLowerCase().includes(searchValue.toLowerCase());
+      ben.name.toLowerCase().includes(searchLower) ||
+      ben.accountNumber.includes(searchLower) ||
+      String(ben.id).includes(searchLower);
     const matchesStatus = statusFilter === "all" || ben.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  // ────────────────────────────────────────────────
+  //  Handlers
+  // ────────────────────────────────────────────────
 
   const handleAddNew = () => {
     setEditingBeneficiary(null);
@@ -77,7 +142,7 @@ export function BeneficiaryTab() {
     setIsAsideOpen(true);
   };
 
-  const handleEdit = (ben: Beneficiary) => {
+  const handleEdit = (ben: DisplayBeneficiary) => {
     setEditingBeneficiary(ben);
     setName(ben.name);
     setAccountNumber(ben.accountNumber);
@@ -86,55 +151,67 @@ export function BeneficiaryTab() {
     setIsAsideOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name.trim() || !accountNumber.trim()) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all required fields.",
+        description: "Beneficiary name and account number are required.",
         variant: "destructive",
       });
       return;
     }
 
+    setSaving(true);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const payload: any = {
+      beneficiary_name: name.trim(),
+      account_number: accountNumber.trim(),
+      description: description.trim() || null,
+      status: status === "Active" ? 1 : 0,
+      posted_by: currentUser?.user_id || 1,
+    };
+
     if (editingBeneficiary) {
-      // Update existing
-      setBeneficiaries((prev) =>
-        prev.map((b) =>
-          b.id === editingBeneficiary.id
-            ? {
-                ...b,
-                name,
-                accountNumber,
-                description,
-                status: status as Beneficiary["status"],
-              }
-            : b
-        )
-      );
-      toast({
-        title: "Beneficiary Updated",
-        description: `${name} has been updated successfully.`,
-      });
-    } else {
-      // Add new
-      const newBeneficiary: Beneficiary = {
-        id: `BEN${String(beneficiaries.length + 1).padStart(3, "0")}`,
-        name,
-        accountNumber,
-        description,
-        status: status as Beneficiary["status"],
-      };
-      setBeneficiaries((prev) => [...prev, newBeneficiary]);
-      toast({
-        title: "Beneficiary Added",
-        description: `${name} has been added successfully.`,
-      });
+      payload.id = editingBeneficiary.id;
     }
 
-    setIsAsideOpen(false);
+    try {
+      if (editingBeneficiary) {
+        // Using the route as-is (body contains id)
+        await api.put("/update-beneficiary-account", payload);
+        toast({ title: "Success", description: "Beneficiary updated." });
+      } else {
+        await api.post("/add-beneficiary-account", payload);
+        toast({ title: "Success", description: "Beneficiary created." });
+      }
+
+      await loadBeneficiaries();
+      setIsAsideOpen(false);
+    } catch (err: unknown) {
+  console.error("Save failed:", err);
+
+  let msg = editingBeneficiary
+    ? "Failed to update beneficiary."
+    : "Failed to create beneficiary.";
+
+  // Safe narrowing
+  if (err && typeof err === 'object' && 'response' in err) {
+    const axiosError = err as { response?: { data?: { message?: string } } };
+    msg = axiosError.response?.data?.message || msg;
+  }
+
+  toast({
+    title: "Error",
+    description: msg,
+    variant: "destructive",
+  });
+} finally {
+  setSaving(false);
+}
   };
 
-  const columns: Column<Beneficiary>[] = [
+  const columns: Column<DisplayBeneficiary>[] = [
     { key: "id", header: "ID", className: "w-20" },
     { key: "name", header: "Beneficiary Name" },
     { key: "accountNumber", header: "Account Number", hideOnMobile: true },
@@ -164,7 +241,7 @@ export function BeneficiaryTab() {
 
   return (
     <div className="space-y-4">
-      {/* Header with Add Button */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <SearchFilter
           searchValue={searchValue}
@@ -190,25 +267,29 @@ export function BeneficiaryTab() {
         </Button>
       </div>
 
-      {/* Data Table */}
+      {/* Table */}
       <div className="rounded-lg border border-border bg-card">
         <DataTable
           data={filteredBeneficiaries}
           columns={columns}
-          keyExtractor={(ben) => ben.id}
-          emptyMessage="No beneficiaries found"
+          keyExtractor={(ben) => ben.id.toString()}
+          emptyMessage={loading ? "Loading beneficiaries..." : "No beneficiaries found"}
+          isLoading={loading}
         />
       </div>
 
-      {/* Right Aside Panel */}
+      {/* Right Aside */}
       <RightAside
         isOpen={isAsideOpen}
         onClose={() => setIsAsideOpen(false)}
         title={editingBeneficiary ? "Edit Beneficiary" : "Add New Beneficiary"}
-        subtitle={editingBeneficiary ? `Editing ${editingBeneficiary.name}` : "Create a new beneficiary"}
+        subtitle={
+          editingBeneficiary
+            ? `Editing ${editingBeneficiary.name}`
+            : "Create a new beneficiary"
+        }
       >
         <div className="space-y-4">
-          {/* Name */}
           <div className="space-y-2">
             <Label htmlFor="name" className="text-xs font-medium">
               Beneficiary Name <span className="text-destructive">*</span>
@@ -222,7 +303,6 @@ export function BeneficiaryTab() {
             />
           </div>
 
-          {/* Account Number */}
           <div className="space-y-2">
             <Label htmlFor="accountNumber" className="text-xs font-medium">
               Account Number <span className="text-destructive">*</span>
@@ -236,7 +316,6 @@ export function BeneficiaryTab() {
             />
           </div>
 
-          {/* Description */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="description" className="text-xs font-medium">
@@ -250,13 +329,12 @@ export function BeneficiaryTab() {
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value.slice(0, MAX_DESCRIPTION_LENGTH))}
-              placeholder="Enter description"
+              placeholder="Enter description (optional)"
               className="min-h-[80px] text-sm resize-none"
               maxLength={MAX_DESCRIPTION_LENGTH}
             />
           </div>
 
-          {/* Status */}
           <div className="space-y-2">
             <Label htmlFor="status" className="text-xs font-medium">
               Status <span className="text-destructive">*</span>
@@ -272,11 +350,18 @@ export function BeneficiaryTab() {
             </Select>
           </div>
 
-          {/* Save Button */}
           <div className="pt-4">
-            <Button onClick={handleSave} className="w-full">
+            <Button
+              onClick={handleSave}
+              className="w-full"
+              disabled={saving || loading}
+            >
               <Save className="h-4 w-4 mr-2" />
-              {editingBeneficiary ? "Update Beneficiary" : "Save Beneficiary"}
+              {saving
+                ? "Saving..."
+                : editingBeneficiary
+                ? "Update Beneficiary"
+                : "Save Beneficiary"}
             </Button>
           </div>
         </div>

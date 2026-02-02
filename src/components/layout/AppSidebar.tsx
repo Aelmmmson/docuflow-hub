@@ -1,3 +1,4 @@
+// src/components/AppSidebar.tsx
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -11,8 +12,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { logout } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
+import api from "@/lib/api";
 
 function MenuIcon({ className }: { className?: string }) {
   return (
@@ -37,10 +40,77 @@ const navigation = [
   { name: "Approval", href: "/approval", icon: CheckCircle },
 ];
 
-const user = {
-  name: "Henry Amoh",
-  email: "henry@unionsg.com",
-};
+// Scrolling text component
+function ScrollingText({ 
+  text, 
+  className, 
+  maxLength = 18 
+}: { 
+  text: string; 
+  className?: string; 
+  maxLength?: number;
+}) {
+  const [shouldScroll, setShouldScroll] = useState(false);
+  const [isScrolling, setIsScrolling] = useState(false);
+  const textRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (textRef.current && containerRef.current) {
+      const textWidth = textRef.current.scrollWidth;
+      const containerWidth = containerRef.current.clientWidth;
+      setShouldScroll(textWidth > containerWidth);
+    }
+  }, [text]);
+
+  useEffect(() => {
+    if (!shouldScroll) return;
+
+    const runCycle = () => {
+      // Start scrolling after initial delay
+      setTimeout(() => {
+        setIsScrolling(true);
+        
+        // Stop scrolling after animation completes
+        setTimeout(() => {
+          setIsScrolling(false);
+        }, 10000); // 10 second scroll duration
+      }, 1500); // 1.5 second initial delay
+    };
+
+    // Run first cycle
+    runCycle();
+
+    // Repeat cycle every 13.5 seconds (1.5s delay + 10s scroll + 2s pause)
+    const cycleInterval = setInterval(runCycle, 13500);
+
+    return () => clearInterval(cycleInterval);
+  }, [shouldScroll]);
+
+  return (
+    <div ref={containerRef} className="overflow-hidden relative">
+      <div
+        ref={textRef}
+        className={cn(
+          "whitespace-nowrap inline-block transition-transform",
+          isScrolling && "animate-marquee-scroll",
+          className
+        )}
+        style={{
+          willChange: isScrolling ? 'transform' : 'auto'
+        }}
+      >
+        {text}
+        {shouldScroll && isScrolling && <span className="inline-block px-8">{text}</span>}
+      </div>
+      {shouldScroll && !isScrolling && (
+        <span className={cn("absolute right-0 top-0 bg-gradient-to-l from-sidebar-accent via-sidebar-accent to-transparent pl-4 pr-1 py-1", className)}>
+          ...
+        </span>
+      )}
+    </div>
+  );
+}
 
 export function AppSidebar() {
   const location = useLocation();
@@ -48,10 +118,27 @@ export function AppSidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  const handleLogout = () => {
+  const currentUser = getCurrentUser();
+  const displayName = currentUser 
+    ? `${currentUser.first_name} ${currentUser.last_name}` 
+    : "Guest";
+  const displayEmail = currentUser?.email || "—";
+  const displayRole = currentUser?.role_name || "—";
+
+  const handleLogout = async () => {
+    try {
+      await api.get("/user/logout");
+    } catch (err) {
+      console.error("[LOGOUT] Backend call failed:", err);
+    }
     logout();
     navigate("/login", { replace: true });
   };
+
+  // Conditional navigation – only show Settings for admin
+  const navItems = currentUser?.role_name?.toLowerCase() === "admin"
+    ? [...navigation, { name: "Settings", href: "/settings", icon: Settings }]
+    : navigation;
 
   return (
     <>
@@ -77,7 +164,7 @@ export function AppSidebar() {
         />
       )}
 
-      {/* Sidebar - Fixed height, internal scroll if needed */}
+      {/* Sidebar */}
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-40 flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:z-auto overflow-hidden",
@@ -107,9 +194,9 @@ export function AppSidebar() {
           </div>
         </div>
 
-        {/* Navigation - Scrollable if content overflows */}
+        {/* Navigation */}
         <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
-          {navigation.map((item) => {
+          {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.href;
             return (
@@ -144,64 +231,48 @@ export function AppSidebar() {
         </nav>
 
         {/* Bottom Section */}
-        <div className="p-3 space-y-2">
-          {/* Settings */}
-          <div className="relative group">
-            <NavLink
-              to="/settings"
-              onClick={() => setIsMobileOpen(false)}
-              className={cn(
-                "w-full flex items-center gap-3 text-xs font-medium transition-all duration-200",
-                location.pathname === "/settings"
-                  ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 shadow-sm"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent",
-                isCollapsed
-                  ? "justify-center rounded-lg p-3"
-                  : "rounded-xl px-4 py-3",
-              )}
-            >
-              <Settings className="h-4 w-4 flex-shrink-0" />
-              {!isCollapsed && <span>Settings</span>}
-            </NavLink>
-            {isCollapsed && (
-              <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-sidebar-foreground text-sidebar rounded-lg text-xs font-medium opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">
-                Settings
-                <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-sidebar-foreground" />
-              </div>
-            )}
+        <div className="p-3 -space-y-1">
+  {/* User Profile - Full */}
+  {!isCollapsed && (
+    <div className="pt-2 border-t border-sidebar-border">
+      <div className="flex items-center gap-3 rounded-xl bg-sidebar-accent p-3">
+        <div className="relative flex-shrink-0">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-sm font-bold shadow-lg">
+            {displayName.split(" ").map(n => n[0]).join("") || "?"}
           </div>
+          <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-sidebar" />
+        </div>
+        <div className="flex-1 min-w-0">
+          {/* Name with scrolling - Reduced bottom margin */}
+          <ScrollingText 
+            text={displayName}
+            className="text-xs font-semibold text-sidebar-foreground pb-0.5" // Changed from default to mb-0.5
+            maxLength={18}
+          />
 
-          {/* User Profile - Full */}
-          {!isCollapsed && (
-            <div className="pt-2 border-t border-sidebar-border">
-              <div className="flex items-center gap-3 rounded-xl bg-sidebar-accent p-3">
-                <div className="relative flex-shrink-0">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-sm font-bold shadow-lg">
-                    {user.name
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")}
-                  </div>
-                  <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-sidebar" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-sidebar-foreground truncate">
-                    {user.name}
-                  </p>
-                  <p className="text-2xs text-sidebar-foreground/60 truncate">
-                    {user.email}
-                  </p>
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
-                  title="Logout"
-                >
-                  <LogOut className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Email with scrolling - Reduced bottom margin */}
+          <ScrollingText 
+            text={displayEmail}
+            className="text-2xs text-sidebar-foreground/60 py-0.5" // Changed from default to mb-0.5
+            maxLength={22}
+          />
+
+          {/* Role – static, no scroll */}
+          <p className="text-2xs text-sidebar-foreground/60 truncate">
+            {displayRole}
+          </p>
+        </div>
+
+        <button
+          onClick={handleLogout}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors flex-shrink-0"
+          title="Logout"
+        >
+          <LogOut className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  )}
 
           {/* Collapsed User Avatar */}
           {isCollapsed && (
@@ -209,22 +280,45 @@ export function AppSidebar() {
               <div className="flex justify-center">
                 <div className="relative">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-sm font-bold shadow-lg cursor-pointer">
-                    {user.name
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")}
+                    {displayName.split(" ").map(n => n[0]).join("") || "?"}
                   </div>
                   <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-sidebar" />
                 </div>
               </div>
               <div className="absolute left-full ml-2 bottom-0 px-3 py-2 bg-sidebar-foreground text-sidebar rounded-lg text-xs font-medium opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">
-                {user.name}
-                <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-sidebar-foreground" />
+                {displayName}
+                <br />
+                {displayEmail}
+                <br />
+                {displayRole}
               </div>
             </div>
           )}
         </div>
       </aside>
+
+      {/* Add styles for marquee animation */}
+      <style>{`
+        @keyframes marquee {
+          0% {
+            transform: translate3d(0, 0, 0);
+          }
+          100% {
+            transform: translate3d(-50%, 0, 0);
+          }
+        }
+
+        .animate-marquee-scroll {
+          animation: marquee 10s linear forwards;
+          backface-visibility: hidden;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+        }
+
+        .animate-marquee-scroll:hover {
+          animation-play-state: paused;
+        }
+      `}</style>
     </>
   );
 }

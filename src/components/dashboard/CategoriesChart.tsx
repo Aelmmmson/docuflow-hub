@@ -1,12 +1,19 @@
+// src/components/dashboard/CategoriesChart.tsx
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import { CategoryItem } from "@/pages/Dashboard";
 
-const data = [
-  { name: "Newspaper Expense", value: 35, color: "hsl(var(--primary))" },
-  { name: "Electric Expenses", value: 45, color: "hsl(var(--accent))" },
-  { name: "Office Supplies", value: 20, color: "hsl(var(--warning))" },
-];
+interface CategoriesChartProps {
+  categoriesData: CategoryItem[];
+}
 
-export function CategoriesChart() {
+export function CategoriesChart({ categoriesData }: CategoriesChartProps) {
+  const totalQuantity = categoriesData.reduce((sum, item) => sum + item.quantity, 0);
+  const chartData = categoriesData.map(item => ({
+    name: item.description,
+    value: totalQuantity > 0 ? (item.quantity / totalQuantity * 100) : 0,
+    color: item.color_code,
+  }));
+
   return (
     <div className="relative w-full h-64 animate-fade-in" style={{ animationDelay: "400ms" }}>
       {/* Folder tab on TOP RIGHT */}
@@ -22,17 +29,18 @@ export function CategoriesChart() {
       <div className="work-1 absolute bottom-0 bg-gradient-to-t from-emerald-50 to-white dark:from-emerald-950/50 dark:to-card w-full h-[calc(100%-16px)] rounded-2xl rounded-tl-none overflow-hidden
         after:absolute after:content-[''] after:bottom-[99%] after:left-0 after:w-[80%] after:h-[16px] after:bg-white dark:after:bg-card after:rounded-t-2xl 
         before:absolute before:content-[''] before:-top-[10px] before:left-[calc(80%-12px)] before:size-3 before:bg-white dark:before:bg-card before:[clip-path:polygon(0_14%,50%_100%,0%_100%)]">
-        
-        <div className="absolute inset-0 p-4 flex flex-col z-10">
+        <div className="absolute inset-0 flex flex-col z-10 p-4 space-y-2">
           <div className="flex justify-between items-center mb-2">
             <h2 className="text-sm font-bold text-foreground">Document Categories</h2>
-            <span className="text-2xs bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 px-2 py-1 rounded-full">3 Active</span>
+            <span className="text-2xs bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 px-2 py-1 rounded-full inline-flex items-center gap-1 shadow-sm">
+              {categoriesData.length} Active
+            </span>
           </div>
           <div className="flex-1 min-h-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={data}
+                  data={chartData}
                   cx="50%"
                   cy="45%"
                   innerRadius={35}
@@ -40,7 +48,7 @@ export function CategoriesChart() {
                   paddingAngle={3}
                   dataKey="value"
                 >
-                  {data.map((entry, index) => (
+                  {chartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
@@ -50,8 +58,9 @@ export function CategoriesChart() {
                     border: "1px solid hsl(var(--border))",
                     borderRadius: "8px",
                     fontSize: "11px",
+                    color: "hsl(var(--foreground))", // visible in dark mode
                   }}
-                  formatter={(value: number) => [`${value}%`, "Percentage"]}
+                  formatter={(value: number) => [`${value.toFixed(1)}%`, "Percentage"]}
                 />
                 <Legend
                   verticalAlign="bottom"

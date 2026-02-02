@@ -1,3 +1,4 @@
+// src/pages/Dashboard.tsx
 import { FileText, FileCheck, FileX, FileClock } from "lucide-react";
 import { FolderCard } from "@/components/dashboard/FolderCard";
 import { RecentDocuments } from "@/components/dashboard/RecentDocuments";
@@ -6,108 +7,202 @@ import { CategoriesChart } from "@/components/dashboard/CategoriesChart";
 import { DashboardSkeleton } from "@/components/skeletons/DashboardSkeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useEffect, useState } from "react";
+import { getCurrentUser } from "@/lib/auth";
+import api from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
-const user = {
-  name: "John",
-};
+// ────────────────────────────────────────────────
+//  Types (based on backend response)
+// ────────────────────────────────────────────────
+export interface RecentDoc {
+  id: number;
+  doctype_id: number;
+  branch: string;
+  requested_amount: string;
+  approved_amount: string | null;
+  customer_no: string;
+  customer_desc: string;
+  details: string;
+  doc_id: string;
+  batch_no: string | null;
+  transaction_date: string | null;
+  is_transaction_failed: number;
+  is_approved: number;
+  posted_by: string;
+  status: string;
+  approval_stage: string;
+  current_approvers: number | null;
+  is_required_approvers_left: number;
+  decline_reason: string | null;
+  updated_by: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  stage_updated_at: string;
+  doctype_name: string;
+}
 
-const cardData = [
-  {
-    id: 1,
-    count: 128,
-    label: "File(s)",
-    title: "Generated",
-    color: {
-      tab: "from-blue-300 to-blue-300",
-      body: "bg-gradient-to-t from-blue-50 to-white dark:from-blue-950/50 dark:to-card",
-      layer1: "bg-blue-50 dark:bg-blue-900/30",
-      layer2: "bg-blue-200 dark:bg-blue-800/40",
-    },
-    iconColor: "#60A5FA",
-    icon: <FileText className="w-full h-full" />,
-    backgroundIcon: (
-      <svg className="w-52 h-52 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-      </svg>
-    ),
-  },
-  {
-    id: 2,
-    count: 94,
-    label: "File(s)",
-    title: "Approved",
-    color: {
-      tab: "from-emerald-300 to-emerald-300",
-      body: "bg-gradient-to-t from-emerald-50 to-white dark:from-emerald-950/50 dark:to-card",
-      layer1: "bg-emerald-50 dark:bg-emerald-900/30",
-      layer2: "bg-emerald-200 dark:bg-emerald-800/40",
-    },
-    iconColor: "#34D399",
-    icon: <FileCheck className="w-full h-full" />,
-    backgroundIcon: (
-      <svg className="w-52 h-52 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-      </svg>
-    ),
-  },
-  {
-    id: 3,
-    count: 22,
-    label: "File(s)",
-    title: "Unapproved",
-    color: {
-      tab: "from-amber-300 to-amber-300",
-      body: "bg-gradient-to-t from-amber-50 to-white dark:from-amber-950/50 dark:to-card",
-      layer1: "bg-amber-50 dark:bg-amber-900/30",
-      layer2: "bg-amber-200 dark:bg-amber-800/40",
-    },
-    iconColor: "#FBBF24",
-    icon: <FileClock className="w-full h-full" />,
-    backgroundIcon: (
-      <svg className="w-52 h-52 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-      </svg>
-    ),
-  },
-  {
-    id: 4,
-    count: 12,
-    label: "File(s)",
-    title: "Rejected",
-    color: {
-      tab: "from-red-300 to-red-300",
-      body: "bg-gradient-to-t from-red-50 to-white dark:from-red-950/50 dark:to-card",
-      layer1: "bg-red-50 dark:bg-red-900/30",
-      layer2: "bg-red-200 dark:bg-red-800/40",
-    },
-    iconColor: "#F87171",
-    icon: <FileX className="w-full h-full" />,
-    backgroundIcon: (
-      <svg className="w-52 h-52 text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M6 18L18 6M6 6l12 12"></path>
-      </svg>
-    ),
-  },
-];
+export interface ExpenseItem {
+  id: number;
+  requested_amount: number;
+  description: string;
+  color_code: string;
+}
 
-export default function Dashboard() {
+export interface CategoryItem {
+  quantity: number;
+  description: string;
+  color_code: string;
+}
+
+interface DashboardResponse {
+  result: [
+    { rejecteddocs: number }[],
+    { unapproveddocs: number }[],
+    { approveddocs: number }[],
+    { generateddocs: number }[],
+    RecentDoc[],
+    ExpenseItem[],
+    CategoryItem[]
+  ];
+  status: string;
+}
+
+const Dashboard = () => {
+  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [cardData, setCardData] = useState([
+    {
+      id: 1,
+      count: 0,
+      label: "File(s)",
+      title: "Generated",
+      color: {
+        tab: "from-blue-300 to-blue-300",
+        body: "bg-gradient-to-t from-blue-50 to-white dark:from-blue-950/50 dark:to-card",
+        layer1: "bg-blue-50 dark:bg-blue-900/30",
+        layer2: "bg-blue-200 dark:bg-blue-800/40",
+      },
+      iconColor: "#60A5FA",
+      icon: <FileText className="w-full h-full" />,
+      backgroundIcon: (
+        <svg className="w-52 h-52 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+      ),
+    },
+    {
+      id: 2,
+      count: 0,
+      label: "File(s)",
+      title: "Approved",
+      color: {
+        tab: "from-emerald-300 to-emerald-300",
+        body: "bg-gradient-to-t from-emerald-50 to-white dark:from-emerald-950/50 dark:to-card",
+        layer1: "bg-emerald-50 dark:bg-emerald-900/30",
+        layer2: "bg-emerald-200 dark:bg-emerald-800/40",
+      },
+      iconColor: "#34D399",
+      icon: <FileCheck className="w-full h-full" />,
+      backgroundIcon: (
+        <svg className="w-52 h-52 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+      ),
+    },
+    {
+      id: 3,
+      count: 0,
+      label: "File(s)",
+      title: "Unapproved",
+      color: {
+        tab: "from-amber-300 to-amber-300",
+        body: "bg-gradient-to-t from-amber-50 to-white dark:from-amber-950/50 dark:to-card",
+        layer1: "bg-amber-50 dark:bg-amber-900/30",
+        layer2: "bg-amber-200 dark:bg-amber-800/40",
+      },
+      iconColor: "#FBBF24",
+      icon: <FileClock className="w-full h-full" />,
+      backgroundIcon: (
+        <svg className="w-52 h-52 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+      ),
+    },
+    {
+      id: 4,
+      count: 0,
+      label: "File(s)",
+      title: "Rejected",
+      color: {
+        tab: "from-rose-300 to-rose-300",
+        body: "bg-gradient-to-t from-rose-50 to-white dark:from-rose-950/50 dark:to-card",
+        layer1: "bg-rose-50 dark:bg-rose-900/30",
+        layer2: "bg-rose-200 dark:bg-rose-800/40",
+      },
+      iconColor: "#F43F5E",
+      icon: <FileX className="w-full h-full" />,
+      backgroundIcon: (
+        <svg className="w-52 h-52 text-rose-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+      ),
+    },
+  ]);
 
-  useEffect(() => {
-    // Simulate loading
-    const loadTimer = setTimeout(() => setIsLoading(false), 1200);
-    return () => clearTimeout(loadTimer);
-  }, []);
+  const currentUser = getCurrentUser();
+  const userName = currentUser ? currentUser.first_name : "User";
+  const userId = currentUser?.user_id || 1;
+  const role = currentUser?.role_name?.toLowerCase() || "admin";
+
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [recentDocs, setRecentDocs] = useState<RecentDoc[]>([]);
+  const [expensesData, setExpensesData] = useState<ExpenseItem[]>([]);
+  const [categoriesData, setCategoriesData] = useState<CategoryItem[]>([]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    async function fetchDashboardData() {
+      try {
+        const res = await api.get<DashboardResponse>(`/get-dashbaord-stats/${userId}/${role}`);
+        const result = res.data.result || [];
+
+        // Extract counts from nested arrays (index 0-3)
+        const rejected = result[0]?.[0]?.rejecteddocs || 0;
+        const unapproved = result[1]?.[0]?.unapproveddocs || 0;
+        const approved = result[2]?.[0]?.approveddocs || 0;
+        const generated = result[3]?.[0]?.generateddocs || 0;
+
+        // Update cards
+        setCardData((prev) => prev.map((card, index) => ({
+          ...card,
+          count: [generated, approved, unapproved, rejected][index],
+        })));
+
+        // Update charts and recent (index 4-6)
+        setRecentDocs(result[4] || []);
+        setExpensesData(result[5] || []);
+        setCategoriesData(result[6] || []);
+      } catch (err: unknown) {
+        console.error("[DASHBOARD] Fetch failed:", err);
+        toast({
+          title: "Error",
+          description: "Failed to load dashboard data.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchDashboardData();
+  }, [userId, role, toast]);
+
   const formatDate = (date: Date) => {
     return date.toLocaleDateString("en-US", {
-      weekday: "long",
       year: "numeric",
       month: "long",
       day: "numeric",
@@ -132,7 +227,7 @@ export default function Dashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div className="animate-fade-in">
           <h1 className="text-lg font-bold text-foreground">
-            Welcome, {user.name}
+            Welcome, {userName}
           </h1>
           <p className="text-xs text-muted-foreground">
             Manage your documents efficiently
@@ -168,15 +263,17 @@ export default function Dashboard() {
       {/* Charts and Recent Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-1">
-          <RecentDocuments />
+          <RecentDocuments recentDocs={recentDocs} />
         </div>
         <div className="lg:col-span-1">
-          <ExpensesChart />
+          <ExpensesChart expensesData={expensesData} />
         </div>
         <div className="lg:col-span-1">
-          <CategoriesChart />
+          <CategoriesChart categoriesData={categoriesData} />
         </div>
       </div>
     </div>
   );
-}
+};
+
+export default Dashboard;
