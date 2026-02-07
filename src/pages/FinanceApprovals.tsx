@@ -1,13 +1,13 @@
 /**
- * Approval Page
- * =============
- * Redesigned approval queue with table view, search, filters, and View details aside.
- * Matches the reference design with card view on mobile/tablet.
+ * Finance Approvals Page
+ * ======================
+ * Finance-specific approval queue with table view, search, filters, and View details aside.
+ * Similar to Approvals page but with finance-specific endpoints.
  */
 
 import { ApprovalSkeleton } from "@/components/skeletons/ApprovalSkeleton";
 import { useState, useEffect, useCallback } from "react";
-import { Eye, FileText, CheckCircle, XCircle, Search, Grid, List, ExternalLink, Download, X } from "lucide-react";
+import { Eye, FileText, CheckCircle, XCircle, Search, DollarSign, Grid, List, ExternalLink, Download, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,7 +51,7 @@ import api from "@/lib/api";
 import { DocumentCard } from "../components/capture/DocumentCard";
 import { GeneratedDocument } from "../components/capture/GeneratedTab";
 
-interface ApprovalDocument {
+interface FinanceApprovalDocument {
   id: number;
   doc_id: string;
   created_at: string;
@@ -64,9 +64,14 @@ interface ApprovalDocument {
   customerName: string;
   customer_no?: string;
   customer_desc?: string;
-  approvalComments?: { comment: string; approver: string; activity_id: number }[] | string;
+  finance_comments?: { comment: string; approver: string; activity_id: number }[] | string;
   documents?: [];
   amount?: string;
+  // Finance-specific fields
+  account_code?: string;
+  payment_method?: string;
+  due_date?: string;
+  tax_amount?: string;
   // For DocumentCard compatibility
   referenceNumber?: string;
   uploadDate?: string;
@@ -74,11 +79,10 @@ interface ApprovalDocument {
   description?: string;
 }
 
-// format date function
+// Format date function
 const formatDate = (isoString: string) => {
   const date = new Date(isoString);
   
-  // Option A: Relative time (e.g., "2 hours ago", "3 days ago")
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
@@ -89,7 +93,6 @@ const formatDate = (isoString: string) => {
   if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
   if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
   
-  // Option B: Formatted date (e.g., "Feb 7, 2026")
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -97,11 +100,11 @@ const formatDate = (isoString: string) => {
   });
 };
 
-export default function Approval() {
+export default function FinanceApprovals() {
   const { toast } = useToast();
   const currentUser = getCurrentUser();
   const [isLoading, setIsLoading] = useState(true);
-  const [documents, setDocuments] = useState<ApprovalDocument[]>([]);
+  const [documents, setDocuments] = useState<FinanceApprovalDocument[]>([]);
   const [documentTypes, setDocumentTypes] = useState<{id: number, description: string}[]>([]);
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -111,16 +114,18 @@ export default function Approval() {
 
   // View aside state
   const [isViewOpen, setIsViewOpen] = useState(false);
-  const [viewingDoc, setViewingDoc] = useState<ApprovalDocument | null>(null);
+  const [viewingDoc, setViewingDoc] = useState<FinanceApprovalDocument | null>(null);
 
-  // Approve dialog state
-  const [isApproveOpen, setIsApproveOpen] = useState(false);
-  const [approveRemarks, setApproveRemarks] = useState("");
-  const [recommendedAmount, setRecommendedAmount] = useState("");
+  // Finance Approve dialog state
+  const [isFinanceApproveOpen, setIsFinanceApproveOpen] = useState(false);
+  const [financeApproveRemarks, setFinanceApproveRemarks] = useState("");
+  const [approvedAmount, setApprovedAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [accountCode, setAccountCode] = useState("");
 
-  // Decline dialog state
-  const [isDeclineOpen, setIsDeclineOpen] = useState(false);
-  const [declineRemarks, setDeclineRemarks] = useState("");
+  // Finance Decline dialog state
+  const [isFinanceDeclineOpen, setIsFinanceDeclineOpen] = useState(false);
+  const [financeDeclineRemarks, setFinanceDeclineRemarks] = useState("");
 
   // PDF Viewer Modal state
   const [isPdfViewerOpen, setIsPdfViewerOpen] = useState(false);
@@ -134,92 +139,119 @@ export default function Approval() {
   const filteredDocuments = documents.filter((doc) => {
     const matchesSearch =
       doc.doc_id.toLowerCase().includes(searchValue.toLowerCase()) ||
-      doc.details.toLowerCase().includes(searchValue.toLowerCase());
+      doc.details.toLowerCase().includes(searchValue.toLowerCase()) ||
+      (doc.customerName && doc.customerName.toLowerCase().includes(searchValue.toLowerCase()));
     const matchesStatus = statusFilter === "all" || doc.status === statusFilter;
     const matchesType = typeFilter === "all" || doc.doctype_name === typeFilter;
     return matchesSearch && matchesStatus && matchesType;
   });
 
-  const handleView = async(doc: ApprovalDocument) => {
+  const handleView = async (doc: FinanceApprovalDocument) => {
     try {
-      const res = await api.get(`/get-approval-comments/${doc.id}`);
-      console.log("Approval comments response:", res.data);
+      const res = await api.get(`/get-finance-comments/${doc.id}`);
+      console.log("Finance comments response:", res.data);
       
-      setViewingDoc({...doc, approvalComments: res.data.comments});
+      setViewingDoc({...doc, finance_comments: res.data.comments});
       setIsViewOpen(true);
     } catch (error) {
-      console.error("Error fetching approval comments:", error);
+      console.error("Error fetching finance comments:", error);
       setViewingDoc(doc);
       setIsViewOpen(true);
     }
   };
 
-  const handleOpenApprove = () => {
-    setRecommendedAmount("");
-    setApproveRemarks("");
-    setIsApproveOpen(true);
+  const handleOpenFinanceApprove = () => {
+    if (viewingDoc) {
+      setApprovedAmount(viewingDoc.requested_amount || "");
+      setPaymentMethod(viewingDoc.payment_method || "");
+      setAccountCode(viewingDoc.account_code || "");
+    }
+    setFinanceApproveRemarks("");
+    setIsFinanceApproveOpen(true);
   };
 
-  const handleApprove = async () => {
+  const handleFinanceApprove = async () => {
     if (!viewingDoc) return;
 
     const payload = {
       data: {
         docId: viewingDoc.id,
         userId: currentUser?.user_id,
-        recommended_amount: recommendedAmount || null,
-        requested_amount: viewingDoc.amount,
-        remarks: approveRemarks || "",
-        db_account: "",
-        cr_account: viewingDoc.customerNumber,
-        trans_type: viewingDoc.doctype_name,
-        customerDesc: viewingDoc.customerName
+        approved_amount: approvedAmount || viewingDoc.requested_amount,
+        remarks: financeApproveRemarks || "",
+        payment_method: paymentMethod || "",
+        account_code: accountCode || "",
+        finance_user: currentUser?.first_name + " " + currentUser?.last_name,
+        finance_role: currentUser?.role_name
       }
     };
 
     try {
-      const response = await api.put("/approve-doc", payload);
+      const response = await api.put("/finance-approve-doc", payload);
       
       if (response.data.code === "200") {
         setDocuments((prev) => prev.filter((doc) => doc.id !== viewingDoc.id));
         toast({
-          title: "Document Approved",
-          description: `${viewingDoc.doc_id} has been approved successfully.`,
+          title: "Document Finance Approved",
+          description: `${viewingDoc.doc_id} has been approved by finance.`,
         });
-        setIsApproveOpen(false);
+        setIsFinanceApproveOpen(false);
         setIsViewOpen(false);
         setViewingDoc(null);
       }
     } catch (error) {
-      console.error("Approval failed:", error);
+      console.error("Finance approval failed:", error);
       toast({
         title: "Error",
-        description: "Failed to approve document",
+        description: "Failed to approve document for finance",
         variant: "destructive",
       });
     }
   };
 
-  const handleOpenDecline = () => {
-    setDeclineRemarks("");
-    setIsDeclineOpen(true);
+  const handleOpenFinanceDecline = () => {
+    setFinanceDeclineRemarks("");
+    setIsFinanceDeclineOpen(true);
   };
 
-  const handleDecline = () => {
+  const handleFinanceDecline = async () => {
     if (!viewingDoc) return;
 
-    setDocuments((prev) => prev.filter((doc) => doc.id !== viewingDoc.id));
-    toast({
-      title: "Document Declined",
-      description: `${viewingDoc.doc_id} has been declined.`,
-      variant: "destructive",
-    });
-    setIsDeclineOpen(false);
-    setIsViewOpen(false);
-    setViewingDoc(null);
+    const payload = {
+      data: {
+        docId: viewingDoc.id,
+        userId: currentUser?.user_id,
+        remarks: financeDeclineRemarks || "",
+        finance_user: currentUser?.first_name + " " + currentUser?.last_name,
+        finance_role: currentUser?.role_name
+      }
+    };
+
+    try {
+      const response = await api.put("/finance-decline-doc", payload);
+      
+      if (response.data.code === "200") {
+        setDocuments((prev) => prev.filter((doc) => doc.id !== viewingDoc.id));
+        toast({
+          title: "Document Finance Declined",
+          description: `${viewingDoc.doc_id} has been declined by finance.`,
+          variant: "destructive",
+        });
+        setIsFinanceDeclineOpen(false);
+        setIsViewOpen(false);
+        setViewingDoc(null);
+      }
+    } catch (error) {
+      console.error("Finance decline failed:", error);
+      toast({
+        title: "Error",
+        description: "Failed to decline document for finance",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleViewDocumentInModal = (doc: ApprovalDocument) => {
+  const handleViewDocumentInModal = (doc: FinanceApprovalDocument) => {
     if (doc.doc_id) {
       const pdfUrl = `http://10.203.14.169/dms/filesearch-${doc.doc_id}`;
       setPdfUrl(pdfUrl);
@@ -246,12 +278,12 @@ export default function Approval() {
     }
   };
 
-  const handleViewDocumentFromGrid = (doc: ApprovalDocument) => {
+  const handleViewDocumentFromGrid = (doc: FinanceApprovalDocument) => {
     setViewingDoc(doc);
     setIsViewOpen(true);
   };
 
-  const handleViewDocumentFromCard = (doc: ApprovalDocument) => {
+  const handleViewDocumentFromCard = (doc: FinanceApprovalDocument) => {
     if (doc.doc_id) {
       const pdfUrl = `http://10.203.14.169/dms/filesearch-${doc.doc_id}`;
       setPdfUrl(pdfUrl);
@@ -282,19 +314,19 @@ export default function Approval() {
     fetchDocTypes();
   }, [toast]);
 
-  // Fetch approval setups
-  const fetchPendingDocs = useCallback(async () => {
+  // Fetch finance pending documents
+  const fetchFinancePendingDocs = useCallback(async () => {
     const payload = {
       userId: currentUser?.user_id,
       role: [currentUser?.role_name]
     };
     
     try {
-      const res = await api.post("/get-pending-docs", payload);
-      const rawDocs = res.data.documents || res.data.result || [];
+      const res = await api.post("/get-finance-pending-docs", payload);
+      const rawDocs = res.data.documents || res.data.financeDocuments || [];
       
       // Format documents for DocumentCard compatibility
-      const formattedDocs: ApprovalDocument[] = rawDocs.map((doc: {
+      const formattedDocs: FinanceApprovalDocument[] = rawDocs.map((doc: {
         id: number;
         doc_id: string;
         created_at: string;
@@ -308,6 +340,10 @@ export default function Approval() {
         customerNumber?: string;
         customer_desc?: string;
         customerName?: string;
+        account_code?: string;
+        payment_method?: string;
+        due_date?: string;
+        tax_amount?: string;
       }) => ({
         ...doc,
         referenceNumber: doc.doc_id || `REF-${doc.id}`,
@@ -319,22 +355,26 @@ export default function Approval() {
         customerName: doc.customer_desc || doc.customerName || undefined,
         requested_amount: doc.requested_amount || doc.amount || "0",
         status: (doc.status || "SUBMITTED") as "SUBMITTED" | "PAID" | "APPROVED" | "DRAFT" | "REJECTED",
+        account_code: doc.account_code,
+        payment_method: doc.payment_method,
+        due_date: doc.due_date,
+        tax_amount: doc.tax_amount,
       }));
       
       setDocuments(formattedDocs);
     } catch (err: unknown) {
-      console.error("Failed to fetch pending documents:", err);
+      console.error("Failed to fetch finance pending documents:", err);
       toast({
         title: "Error",
-        description: "Could not load pending documents.",
+        description: "Could not load finance pending documents.",
         variant: "destructive",
       });
     }
   }, [currentUser?.role_name, currentUser?.user_id, toast]);
 
   useEffect(() => {
-    fetchPendingDocs();
-  }, [fetchPendingDocs]);
+    fetchFinancePendingDocs();
+  }, [fetchFinancePendingDocs]);
 
   if (isLoading) {
     return <ApprovalSkeleton />;
@@ -344,13 +384,13 @@ export default function Approval() {
     <div className="p-4 lg:p-6 pt-14 lg:pt-6">
       {/* Header with Date/Time and Theme Toggle */}
       <PageHeader
-        title="Approvals"
-        description="Review and approve pending documents"
+        title="Finance Approvals"
+        description="Review and approve pending documents for finance department"
       />
 
       {/* Main Card Container */}
       <div className="rounded-xl bg-card p-4 lg:p-6 shadow-card-md border border-border animate-fade-in">
-        <h2 className="text-lg font-semibold text-foreground mb-4">Approvals</h2>
+        <h2 className="text-lg font-semibold text-foreground mb-4">Finance Approvals Queue</h2>
 
         {/* Search and Filters with View Toggle */}
         <div className="flex flex-col lg:flex-row gap-4 mb-6">
@@ -361,14 +401,14 @@ export default function Approval() {
               <Input
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}
-                placeholder="Search by document number or description..."
+                placeholder="Search by document number, description, or customer..."
                 className="pl-9 h-10"
               />
             </div>
           </div>
 
           {/* Status Filter */}
-          <div className="w-full lg:w-40">
+          <div className="w-full lg:w-48">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="h-10">
                 <SelectValue placeholder="All Statuses" />
@@ -383,7 +423,7 @@ export default function Approval() {
           </div>
 
           {/* Type Filter */}
-          <div className="w-full lg:w-40">
+          <div className="w-full lg:w-48">
             <Select value={typeFilter} onValueChange={setTypeFilter}>
               <SelectTrigger className="h-10">
                 <SelectValue placeholder="All Types" />
@@ -430,16 +470,17 @@ export default function Approval() {
                   <TableHead className="w-16 text-xs font-semibold">ID ↓</TableHead>
                   <TableHead className="text-xs font-semibold">Document</TableHead>
                   <TableHead className="text-xs font-semibold">Description</TableHead>
+                  <TableHead className="w-28 text-xs font-semibold text-center">Amount</TableHead>
                   <TableHead className="w-20 text-xs font-semibold text-center">Stage</TableHead>
-                  <TableHead className="w-28 text-xs font-semibold">Status</TableHead>
+                  <TableHead className="w-32 text-xs font-semibold">Status</TableHead>
                   <TableHead className="w-24 text-xs font-semibold">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredDocuments.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      No documents found
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      No finance documents found for review
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -448,8 +489,8 @@ export default function Approval() {
                       <TableCell className="text-sm font-medium">{index + 1}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-destructive/10">
-                            <FileText className="h-4 w-4 text-destructive" />
+                          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100">
+                            <DollarSign className="h-4 w-4 text-emerald-600" />
                           </div>
                           <div>
                             <p className="text-sm font-medium">{doc.doc_id}</p>
@@ -459,6 +500,9 @@ export default function Approval() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
                         {doc.details}
+                      </TableCell>
+                      <TableCell className="text-center font-medium text-green-600">
+                        ${doc.requested_amount || doc.amount || "0.00"}
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="secondary" className="text-xs font-medium">
@@ -474,14 +518,14 @@ export default function Approval() {
                             <TooltipTrigger asChild>
                               <Button
                                 size="sm"
-                                className="bg-primary hover:bg-primary/90"
+                                className="bg-emerald-600 hover:bg-emerald-700"
                                 onClick={() => handleView(doc)}
                               >
                                 <Eye className="h-4 w-4 mr-1" />
-                                View
+                                Review
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>View document details</TooltipContent>
+                            <TooltipContent>Review finance document</TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                       </TableCell>
@@ -535,7 +579,7 @@ export default function Approval() {
           <div className="lg:hidden space-y-3">
             {filteredDocuments.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                No documents found
+                No finance documents found for review
               </div>
             ) : (
               filteredDocuments.map((doc) => (
@@ -545,13 +589,16 @@ export default function Approval() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10 shrink-0">
-                        <FileText className="h-5 w-5 text-destructive" />
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 shrink-0">
+                        <DollarSign className="h-5 w-5 text-emerald-600" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-semibold">{doc.doc_id}</p>
                         <p className="text-xs text-muted-foreground">{doc.doctype_name}</p>
                         <p className="text-xs text-muted-foreground mt-1 truncate">{doc.details}</p>
+                        <p className="text-sm font-medium text-green-600 mt-1">
+                          ${doc.requested_amount || doc.amount || "0.00"}
+                        </p>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2">
@@ -564,11 +611,11 @@ export default function Approval() {
                   <div className="mt-3 pt-3 border-t border-border">
                     <Button
                       size="sm"
-                      className="w-full bg-primary hover:bg-primary/90"
+                      className="w-full bg-emerald-600 hover:bg-emerald-700"
                       onClick={() => handleView(doc)}
                     >
                       <Eye className="h-4 w-4 mr-1" />
-                      View Details
+                      Review Details
                     </Button>
                   </div>
                 </div>
@@ -584,7 +631,7 @@ export default function Approval() {
               ← Previous
             </Button>
             <div className="flex items-center gap-1">
-              <Button size="sm" className="h-8 w-8 p-0 bg-primary text-primary-foreground">
+              <Button size="sm" className="h-8 w-8 p-0 bg-emerald-600 text-white">
                 1
               </Button>
             </div>
@@ -599,7 +646,7 @@ export default function Approval() {
 <RightAside
   isOpen={isViewOpen}
   onClose={() => setIsViewOpen(false)}
-  title="View Details"
+  title="Finance Review"
   subtitle={viewingDoc ? `Reference: ${viewingDoc.doc_id}` : ""}
 >
   {viewingDoc && (
@@ -630,10 +677,10 @@ export default function Approval() {
                 <span className="text-xs font-medium">${viewingDoc.requested_amount}</span>
               </div>
             )}
-            {viewingDoc.customerNumber && (
+            {viewingDoc.customerName && (
               <div className="flex justify-between">
-                <span className="text-xs text-muted-foreground">Customer Number</span>
-                <span className="text-xs font-medium">{viewingDoc.customerNumber}</span>
+                <span className="text-xs text-muted-foreground">Customer Name</span>
+                <span className="text-xs font-medium">{viewingDoc.customerName}</span>
               </div>
             )}
           </div>
@@ -689,15 +736,34 @@ export default function Approval() {
             </div>
           </div>
 
-          {/* Approval Comments */}
+          {/* Finance-specific fields if available */}
+          {viewingDoc.account_code && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Account Code</Label>
+              <div className="p-3 rounded-lg bg-muted/30 border">
+                <span className="text-xs font-medium">{viewingDoc.account_code}</span>
+              </div>
+            </div>
+          )}
+
+          {viewingDoc.payment_method && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Payment Method</Label>
+              <div className="p-3 rounded-lg bg-muted/30 border">
+                <span className="text-xs font-medium">{viewingDoc.payment_method}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Finance Comments */}
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Approval Comments</Label>
+            <Label className="text-xs font-medium">Finance Review Comments</Label>
             <div className="space-y-2">
-              {Array.isArray(viewingDoc.approvalComments) && viewingDoc.approvalComments.length > 0 ? (
-                viewingDoc.approvalComments.map((comment, index) => (
+              {Array.isArray(viewingDoc.finance_comments) && viewingDoc.finance_comments.length > 0 ? (
+                viewingDoc.finance_comments.map((comment, index) => (
                   <div 
                     key={comment.activity_id || index} 
-                    className="p-3 rounded-lg border border-border bg-muted/30"
+                    className="p-3 rounded-lg border border-border bg-emerald-50 dark:bg-emerald-900/10"
                   >
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <p className="text-xs font-medium text-foreground">{comment.approver}</p>
@@ -707,7 +773,7 @@ export default function Approval() {
                 ))
               ) : (
                 <p className="text-sm text-muted-foreground p-3 rounded-lg border border-border bg-muted/30">
-                  No comments available
+                  No finance comments available
                 </p>
               )}
             </div>
@@ -716,20 +782,20 @@ export default function Approval() {
       </div>
 
       {/* Action Buttons - Fixed at bottom, full width, no horizontal scroll */}
-      <div className="mt-auto border-t bg-background/15 pt-4 pb-6 w-full overflow-x-hidden">
+      <div className="mt-auto border-t bg-background pt-4 pb-6 w-full overflow-x-hidden">
         <div className="flex gap-3 w-full">
           <Button 
             variant="outline" 
             className="flex-1 w-0" /* w-0 allows flex-1 to work properly */
-            onClick={handleOpenDecline}
+            onClick={handleOpenFinanceDecline}
           >
             Decline
           </Button>
           <Button 
-            className="flex-1 w-0 bg-primary hover:bg-primary/90"
-            onClick={handleOpenApprove}
+            className="flex-1 w-0 bg-emerald-600 hover:bg-emerald-700"
+            onClick={handleOpenFinanceApprove}
           >
-            Approve
+            Finance Approve
           </Button>
         </div>
       </div>
@@ -789,55 +855,83 @@ export default function Approval() {
         </div>
       )}
 
-      {/* Approve Dialog */}
-      <Dialog open={isApproveOpen} onOpenChange={setIsApproveOpen}>
+      {/* Finance Approve Dialog */}
+      <Dialog open={isFinanceApproveOpen} onOpenChange={setIsFinanceApproveOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="text-center">
             <div className="flex justify-center mb-4">
               <div className="h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center">
-                <CheckCircle className="h-10 w-10 text-emerald-500" />
+                <DollarSign className="h-10 w-10 text-emerald-500" />
               </div>
             </div>
-            <DialogTitle className="text-xl">Approve Request</DialogTitle>
+            <DialogTitle className="text-xl">Finance Approval</DialogTitle>
             <DialogDescription>
-              Optionally add a recommended amount and remarks before approving
+              Review and approve document for finance processing
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="space-y-1.5">
-              <Label className="text-sm">Recommended Amount (Optional)</Label>
+              <Label className="text-sm">Approved Amount</Label>
               <Input
-                placeholder="Enter amount"
-                value={recommendedAmount}
-                onChange={(e) => setRecommendedAmount(e.target.value)}
+                placeholder="Enter approved amount"
+                value={approvedAmount}
+                onChange={(e) => setApprovedAmount(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Requested: ${viewingDoc?.requested_amount || "0.00"}
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-sm">Payment Method</Label>
+              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select payment method" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
+                  <SelectItem value="CHEQUE">Cheque</SelectItem>
+                  <SelectItem value="CASH">Cash</SelectItem>
+                  <SelectItem value="CREDIT_CARD">Credit Card</SelectItem>
+                  <SelectItem value="OTHER">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-sm">Account Code</Label>
+              <Input
+                placeholder="Enter account code"
+                value={accountCode}
+                onChange={(e) => setAccountCode(e.target.value)}
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-sm">Remarks (Optional)</Label>
+              <Label className="text-sm">Finance Remarks (Optional)</Label>
               <Textarea
-                placeholder="Enter your remarks..."
-                value={approveRemarks}
-                onChange={(e) => setApproveRemarks(e.target.value)}
+                placeholder="Enter finance remarks..."
+                value={financeApproveRemarks}
+                onChange={(e) => setFinanceApproveRemarks(e.target.value)}
                 className="min-h-[100px] resize-none"
               />
             </div>
           </div>
 
           <DialogFooter className="flex gap-3 sm:gap-3">
-            <Button variant="outline" onClick={() => setIsApproveOpen(false)} className="flex-1">
+            <Button variant="outline" onClick={() => setIsFinanceApproveOpen(false)} className="flex-1">
               Cancel
             </Button>
-            <Button onClick={handleApprove} className="flex-1 bg-primary hover:bg-primary/90">
-              Approve
+            <Button onClick={handleFinanceApprove} className="flex-1 bg-emerald-600 hover:bg-emerald-700">
+              Finance Approve
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Decline Dialog */}
-      <Dialog open={isDeclineOpen} onOpenChange={setIsDeclineOpen}>
+      {/* Finance Decline Dialog */}
+      <Dialog open={isFinanceDeclineOpen} onOpenChange={setIsFinanceDeclineOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="text-center">
             <div className="flex justify-center mb-4">
@@ -845,30 +939,36 @@ export default function Approval() {
                 <XCircle className="h-10 w-10 text-destructive" />
               </div>
             </div>
-            <DialogTitle className="text-xl">Decline Request</DialogTitle>
+            <DialogTitle className="text-xl">Finance Decline</DialogTitle>
             <DialogDescription>
-              Optionally add remarks explaining why this request is being declined
+              Provide reason for declining this finance request
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="space-y-1.5">
-              <Label className="text-sm">Remarks (Optional)</Label>
+              <Label className="text-sm">Finance Decline Reason (Required)</Label>
               <Textarea
-                placeholder="Enter your remarks..."
-                value={declineRemarks}
-                onChange={(e) => setDeclineRemarks(e.target.value)}
-                className="min-h-[100px] resize-none"
+                placeholder="Enter detailed reason for declining..."
+                value={financeDeclineRemarks}
+                onChange={(e) => setFinanceDeclineRemarks(e.target.value)}
+                className="min-h-[120px] resize-none"
+                required
               />
             </div>
           </div>
 
           <DialogFooter className="flex gap-3 sm:gap-3">
-            <Button variant="outline" onClick={() => setIsDeclineOpen(false)} className="flex-1">
+            <Button variant="outline" onClick={() => setIsFinanceDeclineOpen(false)} className="flex-1">
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDecline} className="flex-1">
-              Decline
+            <Button 
+              variant="destructive" 
+              onClick={handleFinanceDecline} 
+              className="flex-1"
+              disabled={!financeDeclineRemarks.trim()}
+            >
+              Finance Decline
             </Button>
           </DialogFooter>
         </DialogContent>
