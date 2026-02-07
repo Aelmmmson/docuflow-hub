@@ -148,7 +148,7 @@ export default function Login() {
               className="absolute inset-0 w-full h-full object-cover"
             />
           </video>
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-600/70 via-emerald-500/65 to-teal-500/70 backdrop-blur-[0.2px]" />
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-600/70 via-cyan-500/65 to-teal-500/70 backdrop-blur-[0.2px]" />
           <div className="absolute inset-0 bg-black/30" />
         </div>
 
@@ -214,24 +214,24 @@ export default function Login() {
             <div className="relative w-full h-80 lg:h-72 shadow-lg hover:shadow-2xl transition-shadow duration-300 rounded-2xl">
               {/* Decorative folder elements */}
               <div
-                className="work-5 bg-gradient-to-r from-emerald-300 to-emerald-300 w-full h-full rounded-2xl rounded-tr-none relative 
-                after:absolute after:content-[''] after:bottom-[99%] after:right-0 after:w-32 after:h-4 after:bg-gradient-to-r after:from-emerald-300 after:to-emerald-300 after:rounded-t-2xl 
-                before:absolute before:content-[''] before:-top-[14px] before:right-[123px] before:w-4 before:h-4 before:bg-gradient-to-r before:from-emerald-300 before:to-emerald-300 before:[clip-path:polygon(100%_35%,100%_100%,50%_100%)]"
+                className="work-5 bg-gradient-to-r from-blue-300 to-blue-300 w-full h-full rounded-2xl rounded-tr-none relative 
+                after:absolute after:content-[''] after:bottom-[99%] after:right-0 after:w-32 after:h-4 after:bg-gradient-to-r after:from-blue-300 after:to-blue-300 after:rounded-t-2xl 
+                before:absolute before:content-[''] before:-top-[14px] before:right-[123px] before:w-4 before:h-4 before:bg-gradient-to-r before:from-blue-300 before:to-blue-300 before:[clip-path:polygon(100%_35%,100%_100%,50%_100%)]"
               />
 
-              <div className="work-4 absolute inset-1 bg-emerald-50 dark:bg-emerald-900/30 rounded-2xl" />
-              <div className="work-2 absolute inset-1 bg-emerald-100 dark:bg-emerald-800/40 rounded-2xl" />
+              <div className="work-4 absolute inset-1 bg-blue-50 dark:bg-blue-900/30 rounded-2xl" />
+              <div className="work-2 absolute inset-1 bg-blue-100 dark:bg-blue-800/40 rounded-2xl" />
 
               <div
-                className="work-1 absolute bottom-0 bg-gradient-to-t from-emerald-50 to-white dark:from-emerald-950/50 dark:to-card w-full h-[calc(100%-16px)] rounded-2xl rounded-tl-none overflow-hidden
+                className="work-1 absolute bottom-0 bg-gradient-to-t from-blue-50 to-white dark:from-blue-950/50 dark:to-card w-full h-[calc(100%-16px)] rounded-2xl rounded-tl-none overflow-hidden
                 after:absolute after:content-[''] after:bottom-[99%] after:left-0 after:w-[80%] after:h-[16px] after:bg-white dark:after:bg-card after:rounded-t-2xl 
                 before:absolute before:content-[''] before:-top-[10px] before:left-[calc(80%-12px)] before:size-3 before:bg-white dark:before:bg-card before:[clip-path:polygon(0_14%,50%_100%,0%_100%)]"
               >
                 <div className="absolute inset-0 p-6 flex flex-col z-10 justify-center">
                   <div className="flex justify-between items-center mb-3">
                     <h2 className="text-base font-bold text-foreground">Sign In</h2>
-                    <span className="text-sm bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 px-2 py-1 rounded-full inline-flex items-center gap-1 shadow-sm">
-                      <Shield className="w-3 h-3 text-emerald-700" />
+                    <span className="text-sm bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 px-2 py-1 rounded-full inline-flex items-center gap-1 shadow-sm">
+                      <Shield className="w-3 h-3 text-blue-700" />
                       <span className="hidden sm:inline">Secure</span>
                     </span>
                   </div>
@@ -257,7 +257,7 @@ export default function Login() {
                         placeholder="Email"
                         type="email"
                         autoComplete="email"
-                        className="w-full pl-10 pr-3 py-2 rounded-md border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        className="w-full pl-10 pr-3 py-2 rounded-md border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
                         required
                       />
                     </div>
@@ -272,7 +272,7 @@ export default function Login() {
                         placeholder="Password"
                         type={showPassword ? "text" : "password"}
                         autoComplete="current-password"
-                        className="w-full pl-10 pr-10 py-2 rounded-md border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        className="w-full pl-10 pr-10 py-2 rounded-md border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
                         required
                       />
                       <button
@@ -288,7 +288,7 @@ export default function Login() {
                       <button
                         type="submit"
                         disabled={loading}
-                        className={`px-6 py-2 rounded-md bg-emerald-600 text-white font-medium shadow-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all ${
+                        className={`px-6 py-2 rounded-md bg-blue-600 text-white font-medium shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all ${
                           loading ? "opacity-60 cursor-not-allowed" : "hover:shadow-lg active:translate-y-px"
                         }`}
                       >
