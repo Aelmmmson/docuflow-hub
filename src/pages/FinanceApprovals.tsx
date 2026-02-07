@@ -452,7 +452,7 @@ export default function FinanceApprovals() {
               <Button
                 variant="ghost"
                 size="sm"
-                className={`h-9 px-3 rounded-none ${viewMode === "table" ? "bg-muted" : ""}`}
+                className={`h-9 px-3 rounded-none ${viewMode === "table" ? "bg-blue-400" : ""}`}
                 onClick={() => setViewMode("table")}
               >
                 <List className="h-4 w-4" />
@@ -460,7 +460,7 @@ export default function FinanceApprovals() {
               <Button
                 variant="ghost"
                 size="sm"
-                className={`h-9 px-3 rounded-none ${viewMode === "grid" ? "bg-muted" : ""}`}
+                className={`h-9 px-3 rounded-none ${viewMode === "grid" ? "bg-blue-400" : ""}`}
                 onClick={() => setViewMode("grid")}
               >
                 <Grid className="h-4 w-4" />
@@ -474,7 +474,7 @@ export default function FinanceApprovals() {
           <div className="hidden lg:block rounded-lg border border-border overflow-hidden">
             <Table>
               <TableHeader>
-                <TableRow className="bg-muted/50">
+                <TableRow className="bg-blue/50">
                   <TableHead className="w-16 text-xs font-semibold">ID ↓</TableHead>
                   <TableHead className="text-xs font-semibold">Document</TableHead>
                   <TableHead className="text-xs font-semibold">Description</TableHead>
@@ -493,7 +493,7 @@ export default function FinanceApprovals() {
                   </TableRow>
                 ) : (
                   filteredDocuments.map((doc, index) => (
-                    <TableRow key={doc.id} className="hover:bg-muted/30">
+                    <TableRow key={doc.id} className="hover:bg-blue/30">
                       <TableCell className="text-sm font-medium">{index + 1}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-3">
@@ -593,7 +593,7 @@ export default function FinanceApprovals() {
               filteredDocuments.map((doc) => (
                 <div
                   key={doc.id}
-                  className="rounded-xl bg-muted/30 p-4 border border-border animate-fade-in"
+                  className="rounded-xl bg-blue-100 p-4 border border-border animate-fade-in"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3">
@@ -662,7 +662,7 @@ export default function FinanceApprovals() {
       <div className="flex-1 overflow-y-auto pb-4"> {/* Scrollable content area */}
         <div className="space-y-4">
           {/* Metadata in a compact grid like Code A */}
-          <div className="rounded-lg bg-muted/50 p-4 space-y-3">
+          <div className="rounded-lg bg-blue-100/50 p-4 space-y-3">
             <div className="flex justify-between">
               <span className="text-xs text-muted-foreground">Reference</span>
               <span className="text-xs font-medium">{viewingDoc.doc_id}</span>
@@ -708,7 +708,7 @@ export default function FinanceApprovals() {
           {/* Description like EnquiryTab */}
           <div className="space-y-2">
             <Label className="text-xs font-medium">Description</Label>
-            <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
+            <p className="text-xs text-muted-foreground bg-blue-100/50 rounded-lg p-3">
               {viewingDoc.details || "No description provided."}
             </p>
           </div>
@@ -760,7 +760,7 @@ export default function FinanceApprovals() {
           {viewingDoc.account_code && (
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Account Code</Label>
-              <div className="p-3 rounded-lg bg-muted/30 border">
+              <div className="p-3 rounded-lg bg-blue-100/30 border">
                 <span className="text-xs font-medium">{viewingDoc.account_code}</span>
               </div>
             </div>
@@ -769,7 +769,7 @@ export default function FinanceApprovals() {
           {viewingDoc.payment_method && (
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Payment Method</Label>
-              <div className="p-3 rounded-lg bg-muted/30 border">
+              <div className="p-3 rounded-lg bg-blue-100/30 border">
                 <span className="text-xs font-medium">{viewingDoc.payment_method}</span>
               </div>
             </div>
@@ -792,7 +792,7 @@ export default function FinanceApprovals() {
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground p-3 rounded-lg border border-border bg-muted/30">
+                <p className="text-sm text-muted-foreground p-3 rounded-lg border border-border bg-blue-100/30">
                   No finance comments available
                 </p>
               )}

@@ -664,7 +664,7 @@ export default function Approval() {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className="h-7 text-xs flex-1 min-w-0"
+                  className="h-7 text-xs flex-1 min-w-0 hover:bg-primary/90"
                   onClick={() => handleViewDocumentInModal(viewingDoc)}
                 >
                   <Eye className="h-3 w-3 mr-1 shrink-0" />
@@ -673,7 +673,7 @@ export default function Approval() {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className="h-7 text-xs flex-1 min-w-0"
+                  className="h-7 text-xs flex-1 min-w-0 hover:bg-primary/90"
                   onClick={handleViewDocumentInTab}
                 >
                   <ExternalLink className="h-3 w-3 mr-1 shrink-0" />
@@ -682,7 +682,7 @@ export default function Approval() {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className="h-7 text-xs flex-1 min-w-0"
+                  className="h-7 text-xs flex-1 min-w-0 hover:bg-primary/90"
                   onClick={handleDownloadDocument}
                 >
                   <Download className="h-3 w-3 mr-1 shrink-0" />
@@ -726,7 +726,7 @@ export default function Approval() {
         <div className="flex gap-3 w-full">
           <Button 
             variant="outline" 
-            className="flex-1 w-0" /* w-0 allows flex-1 to work properly */
+            className="flex-1 w-0 hover:bg-red-500/90" /* w-0 allows flex-1 to work properly */
             onClick={handleOpenDecline}
           >
             Decline
@@ -832,7 +832,7 @@ export default function Approval() {
           </div>
 
           <DialogFooter className="flex gap-3 sm:gap-3">
-            <Button variant="outline" onClick={() => setIsApproveOpen(false)} className="flex-1">
+            <Button variant="outline" onClick={() => setIsApproveOpen(false)} className="flex-1 hover:bg-red-500/90">
               Cancel
             </Button>
             <Button onClick={handleApprove} className="flex-1 bg-primary hover:bg-primary/90">
