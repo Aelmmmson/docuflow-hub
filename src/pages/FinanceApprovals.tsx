@@ -72,6 +72,8 @@ interface FinanceApprovalDocument {
   payment_method?: string;
   due_date?: string;
   tax_amount?: string;
+  db_account_name?: string;
+  db_account?: string;
   // For DocumentCard compatibility
   referenceNumber?: string;
   uploadDate?: string;
@@ -148,10 +150,10 @@ export default function FinanceApprovals() {
 
   const handleView = async (doc: FinanceApprovalDocument) => {
     try {
-      const res = await api.get(`/get-finance-comments/${doc.id}`);
-      console.log("Finance comments response:", res.data);
+      const res = await api.get(`/get-doc/${doc.id}`);
+      console.log("Finance comments response:", res.data.expense_details.account_name);
       
-      setViewingDoc({...doc, finance_comments: res.data.comments});
+      setViewingDoc({...doc, db_account: res.data.expense_details.account_number, db_account_name: res.data.expense_details.account_name});
       setIsViewOpen(true);
     } catch (error) {
       console.error("Error fetching finance comments:", error);
@@ -174,20 +176,20 @@ export default function FinanceApprovals() {
     if (!viewingDoc) return;
 
     const payload = {
-      data: {
+      data:{
         docId: viewingDoc.id,
         userId: currentUser?.user_id,
         approved_amount: approvedAmount || viewingDoc.requested_amount,
         remarks: financeApproveRemarks || "",
-        payment_method: paymentMethod || "",
-        account_code: accountCode || "",
-        finance_user: currentUser?.first_name + " " + currentUser?.last_name,
-        finance_role: currentUser?.role_name
+        db_account:viewingDoc.db_account,
+        cr_account: viewingDoc.customerNumber,
+        customerDesc: viewingDoc.customer_desc,
+        trans_type: viewingDoc.doctype_name
       }
     };
 
     try {
-      const response = await api.put("/finance-approve-doc", payload);
+      const response = await api.post("/make-transaction", payload);
       
       if (response.data.code === "200") {
         setDocuments((prev) => prev.filter((doc) => doc.id !== viewingDoc.id));
@@ -198,6 +200,12 @@ export default function FinanceApprovals() {
         setIsFinanceApproveOpen(false);
         setIsViewOpen(false);
         setViewingDoc(null);
+      }else{
+        toast({
+          title: "Error",
+          description: response.data.message || "Failed to approve document for finance",
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error("Finance approval failed:", error);
@@ -322,7 +330,7 @@ export default function FinanceApprovals() {
     };
     
     try {
-      const res = await api.post("/get-finance-pending-docs", payload);
+      const res = await api.post("/get-pending-docs", payload);
       const rawDocs = res.data.documents || res.data.financeDocuments || [];
       
       // Format documents for DocumentCard compatibility
@@ -677,10 +685,22 @@ export default function FinanceApprovals() {
                 <span className="text-xs font-medium">${viewingDoc.requested_amount}</span>
               </div>
             )}
-            {viewingDoc.customerName && (
+            {viewingDoc.customerNumber && (
               <div className="flex justify-between">
-                <span className="text-xs text-muted-foreground">Customer Name</span>
-                <span className="text-xs font-medium">{viewingDoc.customerName}</span>
+                <span className="text-xs text-muted-foreground">Customer Number</span>
+                <span className="text-xs font-medium">{viewingDoc.customerNumber}</span>
+              </div>
+            )}
+            {viewingDoc.customer_desc && (
+              <div className="flex justify-between">
+                <span className="text-xs text-muted-foreground">Customer</span>
+                <span className="text-xs font-medium">{viewingDoc.customer_desc}</span>
+              </div>
+            )}
+            {viewingDoc.db_account && (
+              <div className="flex justify-between">
+                <span className="text-xs text-muted-foreground">Debit Account</span>
+                <span className="text-xs font-medium">{viewingDoc.db_account} ({viewingDoc.db_account_name})</span>
               </div>
             )}
           </div>
