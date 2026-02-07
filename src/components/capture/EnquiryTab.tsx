@@ -149,6 +149,7 @@ export function EnquiryTab() {
   });
 
   const handleView = (doc: Document) => {
+    console.log("Viewing document:", doc);
     setViewingDoc(doc);
     setIsViewOpen(true);
   };
@@ -333,12 +334,12 @@ export function EnquiryTab() {
             </div>
 
             {/* PDF Preview / File */}
-            {viewingDoc.fileUrl ? (
+            {viewingDoc.referenceNumber ? (
               <div className="space-y-2">
                 <Label className="text-xs font-medium">Document Preview</Label>
                 <div className="border rounded-lg overflow-hidden h-[500px] bg-white">
                   <iframe
-                    src={viewingDoc.fileUrl}
+                    src={`http://10.203.14.169/dms/filesearch-${viewingDoc.referenceNumber}`}
                     title="Document Preview"
                     className="w-full h-full"
                     frameBorder="0"
@@ -359,10 +360,10 @@ export function EnquiryTab() {
                   </Button>
                 </div>
               </div>
-            ) : viewingDoc.fileName ? (
+            ) : viewingDoc.type ? (
               <div className="p-4 border rounded-lg bg-muted/30 text-center">
                 <FileText className="mx-auto h-10 w-10 text-muted-foreground" />
-                <p className="mt-2 text-sm">{viewingDoc.fileName}</p>
+                <p className="mt-2 text-sm">{viewingDoc.type}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   File preview not available
                 </p>
