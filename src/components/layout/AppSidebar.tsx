@@ -9,6 +9,7 @@ import {
   X,
   LogOut,
   CheckCircle,
+  DollarSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -34,10 +35,13 @@ function MenuIcon({ className }: { className?: string }) {
   );
 }
 
-const navigation = [
+// Base navigation items
+const baseNavigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Document Capture", href: "/document-capture", icon: FileInput },
   { name: "Approval", href: "/approval", icon: CheckCircle },
+  { name: "Finance Approvals", href: "/finance-approvals", icon: DollarSign },
+  { name: "Settings", href: "/settings", icon: Settings },
 ];
 
 // Scrolling text component
@@ -135,10 +139,42 @@ export function AppSidebar() {
     navigate("/login", { replace: true });
   };
 
-  // Conditional navigation – only show Settings for admin
-  const navItems = currentUser?.role_name?.toLowerCase() === "admin"
-    ? [...navigation, { name: "Settings", href: "/settings", icon: Settings }]
-    : navigation;
+  // Get filtered navigation based on user role
+  const getFilteredNavigation = () => {
+    const role = currentUser?.role_name?.toLowerCase() || "";
+    
+    switch(role) {
+      case "admin":
+        // Admin: Can see all except Approval and Finance Approvals
+        return baseNavigation.filter(item => 
+          item.name !== "Approval" && item.name !== "Finance Approvals"
+        );
+        
+      case "approver":
+        // Approver: Only Dashboard and Approval
+        return baseNavigation.filter(item => 
+          item.name === "Dashboard" || item.name === "Approval"
+        );
+        
+      case "originator":
+        // Originator: Only Dashboard and Document Capture
+        return baseNavigation.filter(item => 
+          item.name === "Dashboard" || item.name === "Document Capture"
+        );
+        
+      case "finance":
+        // Finance: Only Dashboard and Finance Approvals
+        return baseNavigation.filter(item => 
+          item.name === "Dashboard" || item.name === "Finance Approvals"
+        );
+        
+      default:
+        // Default: Show Dashboard only for unknown roles
+        return baseNavigation.filter(item => item.name === "Dashboard");
+    }
+  };
+
+  const navItems = getFilteredNavigation();
 
   return (
     <>
@@ -231,48 +267,48 @@ export function AppSidebar() {
         </nav>
 
         {/* Bottom Section */}
-        <div className="p-3 -space-y-1">
-  {/* User Profile - Full */}
-  {!isCollapsed && (
-    <div className="pt-2 border-t border-sidebar-border">
-      <div className="flex items-center gap-3 rounded-xl bg-sidebar-accent p-3">
-        <div className="relative flex-shrink-0">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-sm font-bold shadow-lg">
-            {displayName.split(" ").map(n => n[0]).join("") || "?"}
-          </div>
-          <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-sidebar" />
-        </div>
-        <div className="flex-1 min-w-0">
-          {/* Name with scrolling - Reduced bottom margin */}
-          <ScrollingText 
-            text={displayName}
-            className="text-xs font-semibold text-sidebar-foreground pb-0.5" // Changed from default to mb-0.5
-            maxLength={18}
-          />
+        <div className="p-3">
+          {/* User Profile - Full */}
+          {!isCollapsed && (
+            <div className="pt-2 border-t border-sidebar-border">
+              <div className="flex items-center gap-3 rounded-xl bg-sidebar-accent p-3">
+                <div className="relative flex-shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-sm font-bold shadow-lg">
+                    {displayName.split(" ").map(n => n[0]).join("") || "?"}
+                  </div>
+                  <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-sidebar" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  {/* Name with scrolling - Reduced spacing */}
+                  <ScrollingText 
+                    text={displayName}
+                    className="text-xs font-semibold text-sidebar-foreground mb-0.5"
+                    maxLength={18}
+                  />
 
-          {/* Email with scrolling - Reduced bottom margin */}
-          <ScrollingText 
-            text={displayEmail}
-            className="text-2xs text-sidebar-foreground/60 py-0.5" // Changed from default to mb-0.5
-            maxLength={22}
-          />
+                  {/* Email with scrolling - Reduced spacing */}
+                  <ScrollingText 
+                    text={displayEmail}
+                    className="text-2xs text-sidebar-foreground/60 mb-0.5"
+                    maxLength={22}
+                  />
 
-          {/* Role – static, no scroll */}
-          <p className="text-2xs text-sidebar-foreground/60 truncate">
-            {displayRole}
-          </p>
-        </div>
+                  {/* Role – static, no scroll */}
+                  <p className="text-2xs text-sidebar-foreground/60 truncate">
+                    {displayRole}
+                  </p>
+                </div>
 
-        <button
-          onClick={handleLogout}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors flex-shrink-0"
-          title="Logout"
-        >
-          <LogOut className="h-4 w-4" />
-        </button>
-      </div>
-    </div>
-  )}
+                <button
+                  onClick={handleLogout}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors flex-shrink-0"
+                  title="Logout"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Collapsed User Avatar */}
           {isCollapsed && (
