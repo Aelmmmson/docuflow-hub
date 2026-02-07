@@ -782,7 +782,7 @@ export default function FinanceApprovals() {
       </div>
 
       {/* Action Buttons - Fixed at bottom, full width, no horizontal scroll */}
-      <div className="mt-auto border-t bg-background pt-4 pb-6 w-full overflow-x-hidden">
+      <div className="mt-auto border-t bg-background/5 pt-4 pb-6 w-full overflow-x-hidden">
         <div className="flex gap-3 w-full">
           <Button 
             variant="outline" 
