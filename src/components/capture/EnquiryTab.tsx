@@ -95,6 +95,8 @@ export function EnquiryTab() {
   const [isPdfViewerOpen, setIsPdfViewerOpen] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string>("");
 
+  const [documentTypes, setDocumentTypes] = useState([]);
+
   // Fetch documents
   useEffect(() => {
     if (!currentUser?.user_id) {
@@ -173,6 +175,27 @@ export function EnquiryTab() {
       controller.abort();
     };
   }, [currentUser?.user_id, currentUser?.role_name, toast]);
+
+  //fetch document types for filter dropdown 
+  useEffect(() => {
+    const fetchDocTypes = async () => {
+      try {
+        const res = await api.get("/get-doc-types");
+        const types = res.data.documents || res.data.result || res.data || [];
+        setDocumentTypes(types);
+      } catch (err: unknown) {
+        console.error("Failed to load document types:", err);
+        toast({
+          title: "Error",
+          description: "Could not load document types.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    fetchDocTypes();
+  }, [toast]);
+
 
   const filteredDocuments = documents.filter((doc) => {
     const matchesSearch =
@@ -352,10 +375,10 @@ export function EnquiryTab() {
                 <SelectValue placeholder="All Types" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all" className="text-xs">All Types</SelectItem>
-                <SelectItem value="ELECTRIC EXPENSES" className="text-xs">Electric Expenses</SelectItem>
-                <SelectItem value="NEWSPAPER EXPENSE" className="text-xs">Newspaper Expense</SelectItem>
-                {/* Add more types as needed */}
+                <SelectItem value="all">All Types</SelectItem>
+                {documentTypes.map((type) => (
+                  <SelectItem key={type.id} value={type.description}>{type.description}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
