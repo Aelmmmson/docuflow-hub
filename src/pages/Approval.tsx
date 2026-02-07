@@ -636,6 +636,12 @@ export default function Approval() {
                 <span className="text-xs font-medium">{viewingDoc.customerNumber}</span>
               </div>
             )}
+            {viewingDoc.customer_desc && (
+              <div className="flex justify-between">
+                <span className="text-xs text-muted-foreground">Customer</span>
+                <span className="text-xs font-medium">{viewingDoc.customer_desc}</span>
+              </div>
+            )}
           </div>
 
           {/* Description like EnquiryTab */}
