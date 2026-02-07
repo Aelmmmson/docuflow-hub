@@ -6,7 +6,7 @@
  */
 
 import { ApprovalSkeleton } from "@/components/skeletons/ApprovalSkeleton";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Eye, FileText, CheckCircle, XCircle, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { RightAside } from "@/components/shared/RightAside";
 import { useToast } from "@/hooks/use-toast";
+import { getCurrentUser } from "@/lib/auth";
 import {
   Select,
   SelectContent,
@@ -46,99 +47,131 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import api from "@/lib/api";
 
 interface ApprovalDocument {
   id: number;
-  referenceNumber: string;
-  uploadDate: string;
-  description: string;
-  type: string;
-  stage: number;
+  doc_id: string;
+  created_at: string;
+  details: string;
+  doctype_name: string;
+  approval_stage: number;
   status: "SUBMITTED" | "PAID" | "APPROVED";
-  amount: string;
+  requested_amount: string;
   customerNumber: string;
   customerName: string;
-  approvalComments?: string;
+  approvalComments?: [{ comment: string; approver: string; activity_id: number }] | string; // Can be an array of comments or a single string
+  documents?: []; // Array of document URLs or names
 }
 
-const pendingDocuments: ApprovalDocument[] = [
-  {
-    id: 8,
-    referenceNumber: "T768225558",
-    uploadDate: "Jan 1st, 1970",
-    description: "okay",
-    type: "ELECTRIC EXPENSES",
-    stage: 1,
-    status: "SUBMITTED",
-    amount: "200",
-    customerNumber: "093827778827",
-    customerName: "John Smith",
-  },
-  {
-    id: 7,
-    referenceNumber: "T745573411",
-    uploadDate: "Jan 1st, 1970",
-    description: "details goes here",
-    type: "OFFICE SUPPLIES",
-    stage: 1,
-    status: "SUBMITTED",
-    amount: "150",
-    customerNumber: "093827778829",
-    customerName: "Michael Brown",
-    approvalComments: "Approved by manager",
-  },
-  {
-    id: 6,
-    referenceNumber: "T747223384",
-    uploadDate: "Jan 1st, 1970",
-    description: "test",
-    type: "TRAVEL REIMBURSEMENT",
-    stage: 2,
-    status: "PAID",
-    amount: "500",
-    customerNumber: "093827778830",
-    customerName: "Sarah Wilson",
-  },
-  {
-    id: 4,
-    referenceNumber: "T746991485",
-    uploadDate: "Jan 1st, 1970",
-    description: "payment details attached",
-    type: "INVOICE PAYMENT",
-    stage: 2,
-    status: "PAID",
-    amount: "1200",
-    customerNumber: "093827778831",
-    customerName: "Emily Davis",
-  },
-  {
-    id: 3,
-    referenceNumber: "T746632061",
-    uploadDate: "Jan 1st, 1970",
-    description: "PAYMENT FOR USAGE OF ELECTRICITY",
-    type: "ELECTRIC EXPENSES",
-    stage: 1,
-    status: "PAID",
-    amount: "350",
-    customerNumber: "093827778832",
-    customerName: "Robert Johnson",
-  },
-];
+// format date function
+const formatDate = (isoString: string) => {
+  const date = new Date(isoString);
+  
+  // Option A: Relative time (e.g., "2 hours ago", "3 days ago")
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  
+  if (diffMins < 60) return `${diffMins} min${diffMins !== 1 ? 's' : ''} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+  
+  // Option B: Formatted date (e.g., "Feb 7, 2026")
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+};
 
-const documentTypes = [
-  "ELECTRIC EXPENSES",
-  "OFFICE SUPPLIES",
-  "TRAVEL REIMBURSEMENT",
-  "INVOICE PAYMENT",
-];
+// const pendingDocuments: ApprovalDocument[] = [
+//   {
+//     id: 8,
+//     doc_id: "T768225558",
+//     created_at: "Jan 1st, 1970",
+//     description: "okay",
+//     type: "ELECTRIC EXPENSES",
+//     stage: 1,
+//     status: "SUBMITTED",
+//     amount: "200",
+//     customerNumber: "093827778827",
+//     customerName: "John Smith",
+//   },
+//   {
+//     id: 7,
+//     doc_id: "T745573411",
+//     created_at: "Jan 1st, 1970",
+//     description: "details goes here",
+//     type: "OFFICE SUPPLIES",
+//     stage: 1,
+//     status: "SUBMITTED",
+//     amount: "150",
+//     customerNumber: "093827778829",
+//     customerName: "Michael Brown",
+//     approvalComments: "Approved by manager",
+//   },
+//   {
+//     id: 6,
+//     doc_id: "T747223384",
+//     created_at: "Jan 1st, 1970",
+//     description: "test",
+//     type: "TRAVEL REIMBURSEMENT",
+//     stage: 2,
+//     status: "PAID",
+//     amount: "500",
+//     customerNumber: "093827778830",
+//     customerName: "Sarah Wilson",
+//   },
+//   {
+//     id: 4,
+//     doc_id: "T746991485",
+//     created_at: "Jan 1st, 1970",
+//     description: "payment details attached",
+//     type: "INVOICE PAYMENT",
+//     stage: 2,
+//     status: "PAID",
+//     amount: "1200",
+//     customerNumber: "093827778831",
+//     customerName: "Emily Davis",
+//   },
+//   {
+//     id: 3,
+//     doc_id: "T746632061",
+//     created_at: "Jan 1st, 1970",
+//     description: "PAYMENT FOR USAGE OF ELECTRICITY",
+//     type: "ELECTRIC EXPENSES",
+//     stage: 1,
+//     status: "PAID",
+//     amount: "350",
+//     customerNumber: "093827778832",
+//     customerName: "Robert Johnson",
+//   },
+// ];
+
+// const documentTypes = [
+//   "ELECTRIC EXPENSES",
+//   "OFFICE SUPPLIES",
+//   "TRAVEL REIMBURSEMENT",
+//   "INVOICE PAYMENT",
+// ];
+
+ 
+
+
 
 export default function Approval() {
   const { toast } = useToast();
+  const currentUser = getCurrentUser();
   const [isLoading, setIsLoading] = useState(true);
-  const [documents, setDocuments] = useState(pendingDocuments);
+  const [documents, setDocuments] = useState<ApprovalDocument[]>([]);
+  const [documentTypes, setDocumentTypes] = useState([]);
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [loadingTypes, setLoadingTypes] = useState(true);
 
   // View aside state
   const [isViewOpen, setIsViewOpen] = useState(false);
@@ -160,15 +193,19 @@ export default function Approval() {
 
   const filteredDocuments = documents.filter((doc) => {
     const matchesSearch =
-      doc.referenceNumber.toLowerCase().includes(searchValue.toLowerCase()) ||
-      doc.description.toLowerCase().includes(searchValue.toLowerCase());
+      doc.doc_id.toLowerCase().includes(searchValue.toLowerCase()) ||
+      doc.details.toLowerCase().includes(searchValue.toLowerCase());
     const matchesStatus = statusFilter === "all" || doc.status === statusFilter;
-    const matchesType = typeFilter === "all" || doc.type === typeFilter;
+    const matchesType = typeFilter === "all" || doc.doctype_name === typeFilter;
     return matchesSearch && matchesStatus && matchesType;
   });
 
-  const handleView = (doc: ApprovalDocument) => {
-    setViewingDoc(doc);
+  const handleView = async(doc: ApprovalDocument) => {
+
+    const res = await api.get(`/get-approval-comments/${doc.id}`);
+    console.log("Approval comments response:", res.data);
+    
+    setViewingDoc({...doc, approvalComments: res.data.comments});
     setIsViewOpen(true);
   };
 
@@ -178,18 +215,45 @@ export default function Approval() {
     setIsApproveOpen(true);
   };
 
-  const handleApprove = () => {
-    if (!viewingDoc) return;
-    
-    setDocuments((prev) => prev.filter((doc) => doc.id !== viewingDoc.id));
-    toast({
-      title: "Document Approved",
-      description: `${viewingDoc.referenceNumber} has been approved successfully.`,
-    });
-    setIsApproveOpen(false);
-    setIsViewOpen(false);
-    setViewingDoc(null);
+  const handleApprove = async () => {
+  if (!viewingDoc) return;
+
+  const payload = {
+    data: {  // ← Add this wrapper
+      docId: viewingDoc.id,
+      userId: currentUser?.user_id,
+      recommended_amount: recommendedAmount || null,
+      requested_amount: viewingDoc.amount,
+      remarks: approveRemarks || "",
+      db_account: "", // Add these based on your requirements
+      cr_account: viewingDoc.customerNumber,
+      trans_type: viewingDoc.doctype_name,
+      customerDesc: viewingDoc.customerName
+    }
   };
+
+  try {
+    const response = await api.put("/approve-doc", payload);
+    
+    if (response.data.code === "200") {
+      setDocuments((prev) => prev.filter((doc) => doc.id !== viewingDoc.id));
+      toast({
+        title: "Document Approved",
+        description: `${viewingDoc.doc_id} has been approved successfully.`,
+      });
+      setIsApproveOpen(false);
+      setIsViewOpen(false);
+      setViewingDoc(null);
+    }
+  } catch (error) {
+    console.error("Approval failed:", error);
+    toast({
+      title: "Error",
+      description: "Failed to approve document",
+      variant: "destructive",
+    });
+  }
+};
 
   const handleOpenDecline = () => {
     setDeclineRemarks("");
@@ -202,13 +266,59 @@ export default function Approval() {
     setDocuments((prev) => prev.filter((doc) => doc.id !== viewingDoc.id));
     toast({
       title: "Document Declined",
-      description: `${viewingDoc.referenceNumber} has been declined.`,
+      description: `${viewingDoc.doc_id} has been declined.`,
       variant: "destructive",
     });
     setIsDeclineOpen(false);
     setIsViewOpen(false);
     setViewingDoc(null);
   };
+
+  // Fetch document types
+  useEffect(() => {
+    const fetchDocTypes = async () => {
+      try {
+        setLoadingTypes(true);
+        const res = await api.get("/get-doc-types");
+        const types = res.data.documents || res.data.result || res.data || [];
+        setDocumentTypes(types);
+      } catch (err: unknown) {
+        console.error("Failed to load document types:", err);
+        toast({
+          title: "Error",
+          description: "Could not load document types.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoadingTypes(false);
+      }
+    };
+
+    fetchDocTypes();
+  }, [toast]);
+
+  // Fetch approval setups – wrapped in useCallback to stabilize reference
+  const fetchPendingDocs = useCallback(async () => {
+    const payload = {
+      userId : currentUser?.user_id,
+      role: [currentUser?.role_name]
+    }
+    try {
+      const res = await api.post<{ pendingDocuments: ApprovalDocument[] }>("/get-pending-docs", payload);
+      setDocuments(res.data.documents);
+    } catch (err: unknown) {
+      console.error("Failed to fetch pending documents:", err);
+      toast({
+        title: "Error",
+        description: "Could not load pending documents.",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchPendingDocs();
+  }, [fetchPendingDocs]);
 
   if (isLoading) {
     return <ApprovalSkeleton />;
@@ -268,7 +378,7 @@ export default function Approval() {
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
                 {documentTypes.map((type) => (
-                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                  <SelectItem key={type.id} value={type.description}>{type.description}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -281,7 +391,7 @@ export default function Approval() {
             <TableHeader>
               <TableRow className="bg-muted/50">
                 <TableHead className="w-16 text-xs font-semibold">ID ↓</TableHead>
-                <TableHead className="text-xs font-semibold">Document</TableHead>
+                <TableHead className="text-xs font-semibold">Document </TableHead>
                 <TableHead className="text-xs font-semibold">Description</TableHead>
                 <TableHead className="w-20 text-xs font-semibold text-center">Stage</TableHead>
                 <TableHead className="w-28 text-xs font-semibold">Status</TableHead>
@@ -305,17 +415,17 @@ export default function Approval() {
                           <FileText className="h-4 w-4 text-destructive" />
                         </div>
                         <div>
-                          <p className="text-sm font-medium">{doc.referenceNumber}</p>
-                          <p className="text-xs text-muted-foreground">uploaded {doc.uploadDate}</p>
+                          <p className="text-sm font-medium">{doc.doc_id}</p>
+                          <p className="text-xs text-muted-foreground">uploaded {formatDate(doc.created_at)}</p>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
-                      {doc.description}
+                      {doc.details}
                     </TableCell>
                     <TableCell className="text-center">
                       <Badge variant="secondary" className="text-xs font-medium">
-                        {doc.stage}
+                        {doc.approval_stage}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -363,15 +473,15 @@ export default function Approval() {
                       <FileText className="h-5 w-5 text-destructive" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold">{doc.referenceNumber}</p>
-                      <p className="text-xs text-muted-foreground">{doc.type}</p>
-                      <p className="text-xs text-muted-foreground mt-1 truncate">{doc.description}</p>
+                      <p className="text-sm font-semibold">{doc.doc_id}</p>
+                      <p className="text-xs text-muted-foreground">{doc.doctype_name}</p>
+                      <p className="text-xs text-muted-foreground mt-1 truncate">{doc.details}</p>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     <StatusBadge status={doc.status} />
                     <Badge variant="secondary" className="text-xs">
-                      Stage {doc.stage}
+                      Stage {doc.approval_stage}
                     </Badge>
                   </div>
                 </div>
@@ -426,7 +536,7 @@ export default function Approval() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Document</p>
-                  <p className="text-sm font-medium">{viewingDoc.referenceNumber}</p>
+                  <p className="text-sm font-medium">{viewingDoc.doc_id}</p>
                 </div>
               </div>
             </div>
@@ -434,7 +544,7 @@ export default function Approval() {
             {/* Document ID */}
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Document ID</Label>
-              <Input value={viewingDoc.referenceNumber} disabled className="bg-muted/50" />
+              <Input value={viewingDoc.doc_id} disabled className="bg-muted/50" />
             </div>
 
             {/* View Doc Button */}
@@ -443,12 +553,12 @@ export default function Approval() {
             </Button>
 
             {/* Upload Date */}
-            <p className="text-xs text-muted-foreground">uploaded {viewingDoc.uploadDate}</p>
+            <p className="text-xs text-muted-foreground">uploaded {formatDate(viewingDoc.created_at)}</p>
 
             {/* Requested Amount */}
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Requested Amount</Label>
-              <Input value={viewingDoc.amount} disabled className="bg-muted/50" />
+              <Input value={viewingDoc.requested_amount} disabled className="bg-muted/50" />
             </div>
 
             {/* Customer Number */}
@@ -470,18 +580,36 @@ export default function Approval() {
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Details</Label>
               <Textarea 
-                value={viewingDoc.description} 
+                value={viewingDoc.details} 
                 disabled 
                 className="bg-muted/50 min-h-[80px] resize-none" 
               />
             </div>
 
             {/* Approval Comments */}
+            {/* Approval Comments */}
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Approval Comments</Label>
-              <p className="text-sm text-muted-foreground p-3 rounded-lg border border-border bg-muted/30">
-                {viewingDoc.approvalComments || "No comments available"}
-              </p>
+              <div className="space-y-2">
+                {Array.isArray(viewingDoc.approvalComments) && viewingDoc.approvalComments.length > 0 ? (
+                  viewingDoc.approvalComments.map((comment, index) => (
+                    <div 
+                      key={comment.activity_id || index} 
+                      className="p-3 rounded-lg border border-border bg-muted/30"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className="text-xs font-medium text-foreground">{comment.approver}</p>
+                        {/* <Badge variant="secondary" className="text-xs">#{comment.activity_id}</Badge> */}
+                      </div>
+                      <p className="text-sm text-muted-foreground">{comment.comment}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground p-3 rounded-lg border border-border bg-muted/30">
+                    No comments available
+                  </p>
+                )}
+              </div>
             </div>
 
             {/* Action Buttons */}
