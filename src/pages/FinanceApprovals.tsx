@@ -526,7 +526,7 @@ export default function FinanceApprovals() {
                             <TooltipTrigger asChild>
                               <Button
                                 size="sm"
-                                className="bg-emerald-600 hover:bg-emerald-700"
+                                className="bg-blue-600 hover:bg-blue-700"
                                 onClick={() => handleView(doc)}
                               >
                                 <Eye className="h-4 w-4 mr-1" />
@@ -619,7 +619,7 @@ export default function FinanceApprovals() {
                   <div className="mt-3 pt-3 border-t border-border">
                     <Button
                       size="sm"
-                      className="w-full bg-emerald-600 hover:bg-emerald-700"
+                      className="w-full bg-blue-600 hover:bg-blue-700"
                       onClick={() => handleView(doc)}
                     >
                       <Eye className="h-4 w-4 mr-1" />
@@ -639,7 +639,7 @@ export default function FinanceApprovals() {
               ← Previous
             </Button>
             <div className="flex items-center gap-1">
-              <Button size="sm" className="h-8 w-8 p-0 bg-emerald-600 text-white">
+              <Button size="sm" className="h-8 w-8 p-0 bg-blue-600 text-white">
                 1
               </Button>
             </div>
@@ -783,7 +783,7 @@ export default function FinanceApprovals() {
                 viewingDoc.finance_comments.map((comment, index) => (
                   <div 
                     key={comment.activity_id || index} 
-                    className="p-3 rounded-lg border border-border bg-emerald-50 dark:bg-emerald-900/10"
+                    className="p-3 rounded-lg border border-border bg-blue-50 dark:bg-blue-900/10"
                   >
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <p className="text-xs font-medium text-foreground">{comment.approver}</p>
@@ -812,7 +812,7 @@ export default function FinanceApprovals() {
             Decline
           </Button>
           <Button 
-            className="flex-1 w-0 bg-emerald-600 hover:bg-emerald-700"
+            className="flex-1 w-0 bg-blue-600 hover:bg-blue-700"
             onClick={handleOpenFinanceApprove}
           >
             Finance Approve
@@ -943,7 +943,7 @@ export default function FinanceApprovals() {
             <Button variant="outline" onClick={() => setIsFinanceApproveOpen(false)} className="flex-1">
               Cancel
             </Button>
-            <Button onClick={handleFinanceApprove} className="flex-1 bg-emerald-600 hover:bg-emerald-700">
+            <Button onClick={handleFinanceApprove} className="flex-1 bg-blue-600 hover:bg-blue-700">
               Finance Approve
             </Button>
           </DialogFooter>

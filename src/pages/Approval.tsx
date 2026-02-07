@@ -800,8 +800,8 @@ export default function Approval() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="text-center">
             <div className="flex justify-center mb-4">
-              <div className="h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center">
-                <CheckCircle className="h-10 w-10 text-emerald-500" />
+              <div className="h-16 w-16 rounded-full bg-blue-100 flex items-center justify-center">
+                <CheckCircle className="h-10 w-10 text-blue-500" />
               </div>
             </div>
             <DialogTitle className="text-xl">Approve Request</DialogTitle>
