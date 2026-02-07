@@ -12,6 +12,7 @@ import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import RequireAuth from "@/components/RequireAuth";
+import FinanceApprovals from "./pages/FinanceApprovals";
 
 const queryClient = new QueryClient();
 
@@ -53,6 +54,17 @@ const App = () => (
                 <RequireAuth>
                   <MainLayout>
                     <Approval />
+                  </MainLayout>
+                </RequireAuth>
+              }
+            />
+
+            <Route
+              path="/finance-approvals"
+              element={
+                <RequireAuth>
+                  <MainLayout>
+                    <FinanceApprovals />
                   </MainLayout>
                 </RequireAuth>
               }
