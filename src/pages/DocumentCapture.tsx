@@ -59,7 +59,7 @@ export default function DocumentCapture() {
         {/* Main Content - changes span depending on tab */}
         <div className={`${mainColSpan} space-y-4 transition-all duration-300 ease-in-out`}>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="animate-fade-in" style={{ animationDelay: "100ms" }}>
-            <TabsList className="grid w-full grid-cols-3 h-10 bg-muted/50">
+            <TabsList className="grid w-full grid-cols-3 h-10 bg-muted/70">
               <TabsTrigger value="request" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-card">
                 <FileInput className="h-3.5 w-3.5" />
                 Request
