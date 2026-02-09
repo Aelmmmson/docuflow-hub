@@ -223,41 +223,38 @@ export default function FinanceApprovals() {
   };
 
   const handleFinanceDecline = async () => {
-    if (!viewingDoc) return;
-
-    const payload = {
-      data: {
-        docId: viewingDoc.id,
-        userId: currentUser?.user_id,
-        remarks: financeDeclineRemarks || "",
-        finance_user: currentUser?.first_name + " " + currentUser?.last_name,
-        finance_role: currentUser?.role_name
-      }
-    };
-
-    try {
-      const response = await api.put("/finance-decline-doc", payload);
-      
-      if (response.data.code === "200") {
-        setDocuments((prev) => prev.filter((doc) => doc.id !== viewingDoc.id));
+        if (!viewingDoc) return;
+  
+        const payload = {
+          data: {
+            docId: viewingDoc.id,
+            userId: currentUser?.user_id,
+            remarks: financeDeclineRemarks || "",
+          }
+        };
+  
+      try {
+        const response = await api.put("/reject-doc", payload);
+        
+        if (response.data.code === "200") {
+            setDocuments((prev) => prev.filter((doc) => doc.id !== viewingDoc.id));
+            toast({
+                  title: "Document Declined",
+                  description: `${viewingDoc.doc_id} has been declined.`
+            });
+          setIsFinanceDeclineOpen(false);
+          setIsViewOpen(false);
+          setViewingDoc(null);
+        };
+      } catch (error) {      
+        console.error("Decline failed:", error);
         toast({
-          title: "Document Finance Declined",
-          description: `${viewingDoc.doc_id} has been declined by finance.`,
+          title: "Error",
+          description: "Failed to decline document",
           variant: "destructive",
         });
-        setIsFinanceDeclineOpen(false);
-        setIsViewOpen(false);
-        setViewingDoc(null);
       }
-    } catch (error) {
-      console.error("Finance decline failed:", error);
-      toast({
-        title: "Error",
-        description: "Failed to decline document for finance",
-        variant: "destructive",
-      });
     }
-  };
 
   const handleViewDocumentInModal = (doc: FinanceApprovalDocument) => {
     if (doc.doc_id) {

@@ -223,8 +223,7 @@ export default function Approval() {
           setDocuments((prev) => prev.filter((doc) => doc.id !== viewingDoc.id));
           toast({
                 title: "Document Declined",
-                description: `${viewingDoc.doc_id} has been declined.`,
-            variant: "destructive",
+                description: `${viewingDoc.doc_id} has been declined.`
           });
         setIsDeclineOpen(false);
         setIsViewOpen(false);
