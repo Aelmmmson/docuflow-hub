@@ -168,14 +168,15 @@ const Dashboard = () => {
     async function fetchDashboardData() {
       try {
         const res = await api.get<DashboardResponse>(`/get-dashboard-stats/${userId}/${role}`);
-        const result = res.data.result || [];
+        const data = res.data.result || [];
 
         // Extract counts from nested arrays (index 0-3)
-        console.log("Raw dashboard result:", result);
-        const rejected = result.counts.rejected_docs || 0;
-        const unapproved = result.counts.unapproved_docs || 0;
-        const approved = result.counts.approved_docs || 0;
-        const generated = result.counts.total_docs || 0;
+        console.log("Raw dashboard result:", data);
+
+        const rejected = data.counts.rejected_docs || 0;
+        const unapproved = data.counts.unapproved_docs || 0;
+        const approved = data.counts.approved_docs || 0;
+        const generated = data.counts.total_docs || 0;
 
         // Update cards
         setCardData((prev) => prev.map((card, index) => ({
@@ -184,9 +185,9 @@ const Dashboard = () => {
         })));
 
         // Update charts and recent (index 4-6)
-        setRecentDocs(result.recent_documents || []);
-        setExpensesData(result.amount_by_category || []);
-        setCategoriesData(result.docs_by_category || []);
+        setRecentDocs(data.recent_documents || []);
+        setExpensesData(data.amount_by_category || []);
+        setCategoriesData(data.docs_by_category || []);
       } catch (err: unknown) {
         console.error("[DASHBOARD] Fetch failed:", err);
         toast({
@@ -262,7 +263,7 @@ const Dashboard = () => {
       </div>
 
       {/* Charts and Recent Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-16">
         <div className="lg:col-span-1">
           <RecentDocuments recentDocs={recentDocs} />
         </div>
