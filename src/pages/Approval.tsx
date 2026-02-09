@@ -205,19 +205,40 @@ export default function Approval() {
     setIsDeclineOpen(true);
   };
 
-  const handleDecline = () => {
-    if (!viewingDoc) return;
+  const handleDecline = async () => {
+      if (!viewingDoc) return;
 
-    setDocuments((prev) => prev.filter((doc) => doc.id !== viewingDoc.id));
-    toast({
-      title: "Document Declined",
-      description: `${viewingDoc.doc_id} has been declined.`,
-      variant: "destructive",
-    });
-    setIsDeclineOpen(false);
-    setIsViewOpen(false);
-    setViewingDoc(null);
-  };
+      const payload = {
+        data: {
+          docId: viewingDoc.id,
+          userId: currentUser?.user_id,
+          remarks: declineRemarks || "",
+        }
+      };
+
+    try {
+      const response = await api.put("/reject-doc", payload);
+      
+      if (response.data.code === "200") {
+          setDocuments((prev) => prev.filter((doc) => doc.id !== viewingDoc.id));
+          toast({
+                title: "Document Declined",
+                description: `${viewingDoc.doc_id} has been declined.`,
+            variant: "destructive",
+          });
+        setIsDeclineOpen(false);
+        setIsViewOpen(false);
+        setViewingDoc(null);
+      };
+    } catch (error) {      
+      console.error("Decline failed:", error);
+      toast({
+        title: "Error",
+        description: "Failed to decline document",
+        variant: "destructive",
+      });
+    }
+  }
 
   const handleViewDocumentInModal = (doc: ApprovalDocument) => {
     if (doc.doc_id) {

@@ -41,7 +41,7 @@ interface Document {
   status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "PAID";
   fileName?: string; // or file_path
   fileUrl?: string; // full URL for preview
-  rejectionReason?: string;
+  decline_reason?: string;
   amount?: string;
   customerNumber?: string;
   customerDesc?: string;
@@ -68,7 +68,7 @@ interface BackendDocument {
   file_path?: string | null;
   doctype_id?: string;
   stage_updated_at?: string;
-  // rejection_reason?: string;   // add if your backend returns it
+  decline_reason?: string;   // add if your backend returns it
 }
 
 export function EnquiryTab() {
@@ -123,6 +123,7 @@ export function EnquiryTab() {
 
         const mapped = raw.map((d) => ({
           id: d.id,
+          decline_reason:d.decline_reason,
           referenceNumber: d.doc_id || `REF-${d.id}`,
           uploadDate: d.created_at
             ? new Date(d.created_at).toISOString().split("T")[0]
@@ -563,13 +564,13 @@ export function EnquiryTab() {
             )}
 
             {/* Rejection Reason like Code A */}
-            {viewingDoc.status === "REJECTED" && viewingDoc.rejectionReason && (
+            {viewingDoc.status === "REJECTED" && viewingDoc.decline_reason && (
               <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4">
                 <Label className="text-xs font-medium text-destructive">
                   Rejection Reason
                 </Label>
                 <p className="mt-1 text-sm text-destructive/90 break-words">
-                  {viewingDoc.rejectionReason}
+                  {viewingDoc.decline_reason}
                 </p>
               </div>
             )}
@@ -652,7 +653,7 @@ export function EnquiryTab() {
             <div className="space-y-2">
               <Label className="text-xs font-medium">Reason for Rejection</Label>
               <p className="text-sm text-foreground bg-muted/50 rounded-lg p-4 leading-relaxed break-words">
-                {declinedDoc.rejectionReason || "No reason provided."}
+                {declinedDoc.decline_reason || "No reason provided."}
               </p>
             </div>
 

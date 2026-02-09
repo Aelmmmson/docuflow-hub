@@ -167,14 +167,15 @@ const Dashboard = () => {
   useEffect(() => {
     async function fetchDashboardData() {
       try {
-        const res = await api.get<DashboardResponse>(`/get-dashbaord-stats/${userId}/${role}`);
+        const res = await api.get<DashboardResponse>(`/get-dashboard-stats/${userId}/${role}`);
         const result = res.data.result || [];
 
         // Extract counts from nested arrays (index 0-3)
-        const rejected = result[0]?.[0]?.rejecteddocs || 0;
-        const unapproved = result[1]?.[0]?.unapproveddocs || 0;
-        const approved = result[2]?.[0]?.approveddocs || 0;
-        const generated = result[3]?.[0]?.generateddocs || 0;
+        console.log("Raw dashboard result:", result);
+        const rejected = result.counts.rejected_docs || 0;
+        const unapproved = result.counts.unapproved_docs || 0;
+        const approved = result.counts.approved_docs || 0;
+        const generated = result.counts.total_docs || 0;
 
         // Update cards
         setCardData((prev) => prev.map((card, index) => ({
@@ -183,9 +184,9 @@ const Dashboard = () => {
         })));
 
         // Update charts and recent (index 4-6)
-        setRecentDocs(result[4] || []);
-        setExpensesData(result[5] || []);
-        setCategoriesData(result[6] || []);
+        setRecentDocs(result.recent_documents || []);
+        setExpensesData(result.amount_by_category || []);
+        setCategoriesData(result.docs_by_category || []);
       } catch (err: unknown) {
         console.error("[DASHBOARD] Fetch failed:", err);
         toast({

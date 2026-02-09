@@ -38,7 +38,7 @@ export function ExpensesChart({ expensesData }: ExpensesChartProps) {
                   axisLine={false}
                   tickLine={false}
                   tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }}
-                  tickFormatter={(value) => `$${value}`}
+                  tickFormatter={(value) => `ghs${value}`}
                 />
                 <Tooltip
                   contentStyle={{
@@ -48,7 +48,7 @@ export function ExpensesChart({ expensesData }: ExpensesChartProps) {
                     fontSize: "11px",
                     color: "hsl(var(--foreground))", // visible in dark mode
                   }}
-                  formatter={(value: number) => [`$${value.toLocaleString()}`, "Amount"]}
+                  formatter={(value: number) => [`ghs${value.toLocaleString()}`, "Amount"]}
                 />
                 <Bar dataKey="requested_amount" radius={[4, 4, 0, 0]}>
                   {expensesData.map((entry, index) => (
