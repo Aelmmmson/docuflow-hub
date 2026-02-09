@@ -203,7 +203,7 @@ export function AppSidebar() {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:z-auto",
+          "fixed inset-y-0 left-0 z-40 flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:z-auto rounded-r-2xl",
           isCollapsed ? "w-20" : "w-64",
           isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
