@@ -203,19 +203,23 @@ export function AppSidebar() {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:z-auto overflow-hidden",
-          isCollapsed ? "w-16" : "w-64",
+          "fixed inset-y-0 left-0 z-40 flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:z-auto",
+          isCollapsed ? "w-20" : "w-64",
           isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
       >
         {/* Logo with Menu Toggle */}
-        <div className="p-4">
-          <div className="flex items-center gap-3 pt-3">
+        <div className={cn("p-4", isCollapsed && "px-2")}>
+          <div className={cn("flex items-center gap-3 pt-3", isCollapsed && "flex-col gap-2")}>
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center shadow-lg hover:shadow-xl transition-shadow flex-shrink-0"
+              className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center shadow-lg hover:shadow-xl transition-shadow flex-shrink-0"
             >
-              <MenuIcon className="w-5 h-5" />
+              <img
+                src="/usg-logo-O.png"
+                alt="Fallback background"
+                className="inset-0 w-8 h-8 object-cover"
+              />
             </button>
             {!isCollapsed && (
               <div className="flex flex-col min-w-0">
@@ -236,38 +240,34 @@ export function AppSidebar() {
             const Icon = item.icon;
             const isActive = location.pathname === item.href;
             return (
-              <div key={item.name} className="relative group">
-                <NavLink
-                  to={item.href}
-                  onClick={() => setIsMobileOpen(false)}
-                  className={cn(
-                    "w-full flex items-center gap-3 text-xs font-medium transition-all duration-200",
-                    isActive
-                      ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 shadow-sm"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent",
-                    isCollapsed
-                      ? "justify-center rounded-lg p-3"
-                      : "rounded-xl px-4 py-3",
-                  )}
-                >
-                  <Icon className="h-4 w-4 flex-shrink-0" />
-                  {!isCollapsed && <span>{item.name}</span>}
-                </NavLink>
-
-                {/* Tooltip for collapsed state */}
-                {isCollapsed && (
-                  <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-sidebar-foreground text-sidebar rounded-lg text-xs font-medium opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">
-                    {item.name}
-                    <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-sidebar-foreground" />
-                  </div>
+              <NavLink
+                key={item.name}
+                to={item.href}
+                onClick={() => setIsMobileOpen(false)}
+                className={cn(
+                  "w-full flex items-center gap-3 text-xs font-medium transition-all duration-200",
+                  isActive
+                    ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 shadow-sm"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent",
+                  isCollapsed
+                    ? "flex-col justify-center rounded-lg p-2 gap-1"
+                    : "rounded-xl px-4 py-3",
                 )}
-              </div>
+              >
+                <Icon className={cn("flex-shrink-0", isCollapsed ? "h-5 w-5" : "h-4 w-4")} />
+                <span className={cn(
+                  "text-center leading-tight",
+                  isCollapsed && "text-[10px] px-1"
+                )}>
+                  {item.name}
+                </span>
+              </NavLink>
             );
           })}
         </nav>
 
         {/* Bottom Section */}
-        <div className="p-3">
+        <div className={cn("p-3", isCollapsed && "px-2")}>
           {/* User Profile - Full */}
           {!isCollapsed && (
             <div className="pt-2 border-t border-sidebar-border">
@@ -312,21 +312,21 @@ export function AppSidebar() {
 
           {/* Collapsed User Avatar */}
           {isCollapsed && (
-            <div className="relative group pt-2 border-t border-sidebar-border">
-              <div className="flex justify-center">
+            <div className="pt-2 border-t border-sidebar-border">
+              <div className="flex flex-col items-center gap-2">
                 <div className="relative">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-sm font-bold shadow-lg cursor-pointer">
                     {displayName.split(" ").map(n => n[0]).join("") || "?"}
                   </div>
                   <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-sidebar" />
                 </div>
-              </div>
-              <div className="absolute left-full ml-2 bottom-0 px-3 py-2 bg-sidebar-foreground text-sidebar rounded-lg text-xs font-medium opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">
-                {displayName}
-                <br />
-                {displayEmail}
-                <br />
-                {displayRole}
+                <button
+                  onClick={handleLogout}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                  title="Logout"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
               </div>
             </div>
           )}
