@@ -263,7 +263,7 @@ const Dashboard = () => {
       </div>
 
       {/* Charts and Recent Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-16">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-32">
         <div className="lg:col-span-1">
           <RecentDocuments recentDocs={recentDocs} />
         </div>
