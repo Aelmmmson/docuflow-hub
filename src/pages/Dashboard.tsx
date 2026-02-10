@@ -54,16 +54,20 @@ export interface CategoryItem {
   color_code: string;
 }
 
+interface DashboardCounts {
+  rejected_docs: number;
+  unapproved_docs: number;
+  approved_docs: number;
+  total_docs: number;
+}
+
 interface DashboardResponse {
-  result: [
-    { rejecteddocs: number }[],
-    { unapproveddocs: number }[],
-    { approveddocs: number }[],
-    { generateddocs: number }[],
-    RecentDoc[],
-    ExpenseItem[],
-    CategoryItem[]
-  ];
+  result: {
+    counts: DashboardCounts;
+    recent_documents: RecentDoc[];
+    amount_by_category: ExpenseItem[];
+    docs_by_category: CategoryItem[];
+  };
   status: string;
 }
 
@@ -164,44 +168,56 @@ const Dashboard = () => {
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    async function fetchDashboardData() {
-      try {
-        const res = await api.get<DashboardResponse>(`/get-dashboard-stats/${userId}/${role}`);
-        const data = res.data.result || [];
+useEffect(() => {
+  async function fetchDashboardData() {
+    try {
+      const res = await api.get<DashboardResponse>(`/get-dashboard-stats/${userId}/${role}`);
+      
+      // Use type assertion or default values to handle the response
+      const data = res.data.result || {
+        counts: {
+          rejected_docs: 0,
+          unapproved_docs: 0,
+          approved_docs: 0,
+          total_docs: 0
+        },
+        recent_documents: [],
+        amount_by_category: [],
+        docs_by_category: []
+      };
+      
+      console.log("Raw dashboard result:", data);
 
-        // Extract counts from nested arrays (index 0-3)
-        console.log("Raw dashboard result:", data);
+      // Extract counts from the counts object with safe defaults
+      const rejected = data.counts?.rejected_docs ?? 0;
+      const unapproved = data.counts?.unapproved_docs ?? 0;
+      const approved = data.counts?.approved_docs ?? 0;
+      const generated = data.counts?.total_docs ?? 0;
 
-        const rejected = data.counts.rejected_docs || 0;
-        const unapproved = data.counts.unapproved_docs || 0;
-        const approved = data.counts.approved_docs || 0;
-        const generated = data.counts.total_docs || 0;
+      // Update cards
+      setCardData((prev) => prev.map((card, index) => ({
+        ...card,
+        count: [generated, approved, unapproved, rejected][index],
+      })));
 
-        // Update cards
-        setCardData((prev) => prev.map((card, index) => ({
-          ...card,
-          count: [generated, approved, unapproved, rejected][index],
-        })));
-
-        // Update charts and recent (index 4-6)
-        setRecentDocs(data.recent_documents || []);
-        setExpensesData(data.amount_by_category || []);
-        setCategoriesData(data.docs_by_category || []);
-      } catch (err: unknown) {
-        console.error("[DASHBOARD] Fetch failed:", err);
-        toast({
-          title: "Error",
-          description: "Failed to load dashboard data.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
+      // Update charts and recent data
+      setRecentDocs(data.recent_documents ?? []);
+      setExpensesData(data.amount_by_category ?? []);
+      setCategoriesData(data.docs_by_category ?? []);
+    } catch (err: unknown) {
+      console.error("[DASHBOARD] Fetch failed:", err);
+      toast({
+        title: "Error",
+        description: "Failed to load dashboard data.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
+  }
 
-    fetchDashboardData();
-  }, [userId, role, toast]);
+  fetchDashboardData();
+}, [userId, role, toast]);
 
   const formatDate = (date: Date) => {
     return date.toLocaleDateString("en-US", {
