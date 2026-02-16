@@ -148,7 +148,7 @@ export default function Login() {
               className="absolute inset-0 w-full h-full object-cover"
             />
           </video>
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-300/80 via-cyan-300/15 to-blue-200/90 backdrop-blur-[0.2px]" />
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-300/90 via-cyan-300/10 to-blue-200/90 backdrop-blur-[0.2px]" />
           <div className="absolute inset-0 bg-black/30" />
         </div>
 

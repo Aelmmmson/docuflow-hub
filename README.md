@@ -1,4 +1,4 @@
-# xDMS - Document Management System
+# DocuFlow Hub (xDMS)
 
 A modern, web-based Document Management System built with ReactJS, designed for efficient document capture, approval workflows, and organizational settings management.
 
@@ -16,171 +16,93 @@ A modern, web-based Document Management System built with ReactJS, designed for 
 
 ## 🎯 Overview
 
-xDMS (eXtended Document Management System) is a comprehensive solution for managing organizational documents. It provides a clean, modern interface for document capture, approval workflows, and system configuration.
+DocuFlow Hub (xDMS) is a comprehensive solution for managing organizational documents. It provides a clean, modern interface for document capture, approval workflows, and system configuration.
 
 ### Key Capabilities
 
-- **Document Capture**: Upload, categorize, and manage documents
-- **Approval Workflows**: Multi-stage document approval with configurable approvers
-- **User Management**: Role-based access control with Active/Inactive status
-- **Beneficiary Management**: Track payment beneficiaries and account details
-- **Real-time Dashboard**: Visual overview of document statistics
+- **Document Capture**: Upload, categorize, and manage documents.
+- **Approval Workflows**: Multi-stage document approval with configurable approvers and quorums.
+- **User Management**: Role-based access control with Active/Inactive status.
+- **Beneficiary Management**: Track payment beneficiaries and account details.
+- **Real-time Dashboard**: Visual overview of document statistics and financial summaries.
 
 ## ✨ Features
 
 ### Dashboard
-- Welcome greeting with user name
-- Real-time date and time display
-- Summary cards showing document counts by status:
-  - Generated Documents
-  - Approved Documents
-  - Unapproved Documents
-  - Rejected Documents
-- Interactive folder-style cards with count animations
-- Paid Expenses bar chart
-- Document Categories doughnut chart
-- Recent Documents list (last 3 documents)
+- Welcome greeting with user name.
+- Real-time date and time display.
+- Summary cards showing document counts:
+  - **Generated**: Total documents in the system.
+  - **Approved**: Successfully processed documents.
+  - **Unapproved**: Documents awaiting action.
+  - **Rejected**: Documents that failed approval.
+- **Paid Expenses**: Bar chart showing financial metrics by category.
+- **Document Categories**: Doughnut chart visualizing document distribution.
+- **Recent Documents**: Quick access to the latest document activities.
 
 ### Document Capture
-
-#### Request Tab
-- Document type selection dropdown
-- Auto-generated Document ID
-- Amount and Customer Number fields
-- PDF file upload with drag-and-drop
-- Quick Templates sidebar
-- Recent Uploads list
-
-#### Generated Tab
-- Full document listing with search and filters
-- Status-based filtering (Draft, Submitted, Approved, Rejected, Paid)
-- Document type filtering
-- Row actions based on status:
-  - **Edit**: Modify draft documents
-  - **View**: Preview document details
-  - **Submit**: Submit for approval
-  - **Declined Reason**: View rejection details (auto-closes after 15s)
-
-#### Enquiry Tab
-- Search and filter enquiries
-- View enquiry details and responses
-- Status tracking (Open, In Progress, Resolved, Closed)
+- **Request Tab**: Form for new document requests with type selection, amount, and customer details.
+- **Generated Tab**: Management view for draft and submitted documents.
+- **Enquiry Tab**: Searchable history of all documents with status tracking.
+- **Sidebars**: Quick Templates and Recent Uploads for improved efficiency.
 
 ### Settings
-
-#### Users Tab
-- List users with ID, Username, Email, Role, Status
-- Search by username, email, or ID
-- Filter by status (Active/Inactive) and role
-- Add new users via right slide panel
-- Edit existing users
-
-#### Parameters Tab (Document Types)
-- Manage document type definitions
-- Set transactional flag
-- Activate/deactivate document types
-
-#### Document Approval Setup
-- Multi-stage approval workflow wizard
-- Configure 1-10 approval stages
-- Set quorum (minimum approvals) per stage
-- Select approvers from employee list
-- Designate mandatory approvers
-- Progress indicator with navigation dots
-
-#### Beneficiary Setup
-- Manage payment beneficiaries
-- Account number tracking
-- Description with 255 character limit
-- Active/Inactive status management
-
-### Approval Page
-- List of pending approvals
-- Document details preview
-- Approve/Reject actions
+- **Users**: Complete CRUD for system users linked to employee records.
+- **Parameters**: Manage Document Types, including transactional flags and account mappings.
+- **Approval Setup**: Configure multi-stage approval workflows (1-10 stages) with mandatory approvers.
+- **Beneficiary Setup**: Manage payment beneficiaries and their account details.
 
 ## 🛠 Tech Stack
 
-- **Framework**: React 18 with TypeScript
-- **Build Tool**: Vite
-- **Styling**: Tailwind CSS
-- **UI Components**: shadcn/ui (Radix UI primitives)
-- **Charts**: Recharts
-- **Routing**: React Router DOM
-- **State Management**: React Query (TanStack Query)
-- **Icons**: Lucide React
-- **Fonts**: Urbanist (Google Fonts)
+- **Framework**: [React 18](https://reactjs.org/) with [TypeScript](https://www.typescriptlang.org/)
+- **Build Tool**: [Vite](https://vitejs.dev/)
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/)
+- **UI Components**: [shadcn/ui](https://ui.shadcn.com/) (Radix UI primitives)
+- **Charts**: [Recharts](https://recharts.org/)
+- **Routing**: [React Router DOM](https://reactrouter.com/)
+- **State Management**: [TanStack Query](https://tanstack.com/query/latest) (React Query)
+- **Forms**: [React Hook Form](https://react-hook-form.com/) with [Zod](https://zod.dev/)
+- **Icons**: [Lucide React](https://lucide.dev/)
+- **Animations**: [Framer Motion](https://www.framer.com/motion/)
 
 ## 📁 Project Structure
 
 ```
 src/
 ├── components/
-│   ├── capture/              # Document capture components
-│   │   ├── DocumentForm.tsx
-│   │   ├── EnquiryTab.tsx
-│   │   ├── FileUpload.tsx
-│   │   ├── GeneratedTab.tsx
-│   │   ├── QuickTemplates.tsx
-│   │   └── RecentUploads.tsx
-│   ├── dashboard/            # Dashboard components
-│   │   ├── CategoriesChart.tsx
-│   │   ├── ExpensesChart.tsx
-│   │   ├── FolderCard.tsx
-│   │   └── RecentDocuments.tsx
-│   ├── layout/               # Layout components
-│   │   ├── AppSidebar.tsx
-│   │   └── MainLayout.tsx
-│   ├── settings/             # Settings tab components
-│   │   ├── ApprovalSetupTab.tsx
-│   │   ├── BeneficiaryTab.tsx
-│   │   ├── ParametersTab.tsx
-│   │   └── UsersTab.tsx
-│   ├── shared/               # Reusable components
-│   │   ├── ActionMenu.tsx
-│   │   ├── DataTable.tsx
-│   │   ├── PageHeader.tsx
-│   │   ├── RightAside.tsx
-│   │   ├── SearchFilter.tsx
-│   │   └── StatusBadge.tsx
-│   ├── skeletons/            # Loading skeletons
-│   │   ├── ApprovalSkeleton.tsx
-│   │   ├── DashboardSkeleton.tsx
-│   │   ├── DocumentCaptureSkeleton.tsx
-│   │   └── SettingsSkeleton.tsx
-│   └── ui/                   # shadcn/ui components
-├── hooks/
-│   └── use-toast.ts
+│   ├── capture/          # Document capture tabs and forms
+│   ├── dashboard/        # Charts and summary cards
+│   ├── layout/           # Sidebar and main layout wrappers
+│   ├── settings/         # Management tabs (Users, Parameters, etc.)
+│   ├── shared/           # Reusable UI (DataTable, SearchFilter, etc.)
+│   ├── skeletons/        # Loading states
+│   └── ui/               # shadcn/ui base components
+├── hooks/                # Custom React hooks (e.g., use-toast)
 ├── lib/
-│   ├── api.ts                # API configuration & services
-│   └── utils.ts
-├── pages/
-│   ├── Approval.tsx
-│   ├── Dashboard.tsx
-│   ├── DocumentCapture.tsx
-│   ├── Index.tsx
-│   ├── NotFound.tsx
-│   └── Settings.tsx
-├── App.tsx
-├── index.css
-└── main.tsx
+│   ├── api.ts            # Central Axios configuration and interceptors
+│   ├── auth.ts           # Authentication logic and token management
+│   └── utils.ts          # Helper utilities
+├── pages/                # Main application views/routes
+├── App.tsx               # Root component and routing
+├── index.css             # Global styles and Tailwind directives
+└── main.tsx              # Application entry point
 ```
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js 18+ 
-- npm or yarn
+- [Node.js](https://nodejs.org/) 18 or higher
+- [npm](https://www.npmjs.com/) or [Bun](https://bun.sh/)
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/Aelmmmson/docuflow-hub.git
 
 # Navigate to project directory
-cd xdms
+cd docuflow-hub
 
 # Install dependencies
 npm install
@@ -189,7 +111,7 @@ npm install
 npm run dev
 ```
 
-The application will be available at `http://localhost:8080`
+The application will typically be available at `http://localhost:5173`.
 
 ### Build for Production
 
@@ -197,196 +119,59 @@ The application will be available at `http://localhost:8080`
 npm run build
 ```
 
-## 📄 Pages & Components
-
-### Shared Components
-
-#### PageHeader
-Displays page title, description, current date/time, and theme toggle.
-
-```tsx
-<PageHeader 
-  title="Dashboard" 
-  description="Welcome to your document management system" 
-/>
-```
-
-#### SearchFilter
-Reusable search bar with dropdown filters.
-
-```tsx
-<SearchFilter
-  searchValue={search}
-  onSearchChange={setSearch}
-  searchPlaceholder="Search..."
-  filters={[
-    { key: "status", label: "Status", value: statusFilter, onChange: setStatusFilter, options: [...] }
-  ]}
-/>
-```
-
-#### DataTable
-Responsive data table with mobile card view.
-
-```tsx
-<DataTable
-  data={items}
-  columns={columns}
-  keyExtractor={(item) => item.id}
-  emptyMessage="No data found"
-/>
-```
-
-#### RightAside
-Slide-in panel from right side with optional auto-close.
-
-```tsx
-<RightAside
-  isOpen={isOpen}
-  onClose={() => setIsOpen(false)}
-  title="Panel Title"
-  subtitle="Optional subtitle"
-  autoCloseAfter={15} // Optional: seconds
->
-  {/* Content */}
-</RightAside>
-```
-
-#### StatusBadge
-Colored status indicator.
-
-```tsx
-<StatusBadge status="approved" />
-<StatusBadge status="rejected" />
-<StatusBadge status="pending" />
-```
-
-#### ActionMenu
-Dropdown menu for row actions.
-
-```tsx
-<ActionMenu
-  actions={[
-    { label: "Edit", icon: <Edit />, onClick: handleEdit },
-    { label: "Delete", icon: <Trash />, onClick: handleDelete, variant: "destructive" }
-  ]}
-/>
-```
-
 ## 🔌 API Integration
 
-The `src/lib/api.ts` file provides a complete API layer ready for backend integration.
+The system uses a centralized Axios instance located in `src/lib/api.ts`. It handles base URL configuration, authentication headers, and automatic token refreshing.
 
 ### Configuration
 
+- **Base URL**: `/v1/api/dms`
+- **Authentication**: Bearer token via `Authorization` header.
+
+### Key Endpoints
+
+| Category | Endpoint | Method | Description |
+|----------|----------|--------|-------------|
+| Dashboard | `/get-dashboard-stats/:id/:role` | GET | Fetch statistical summaries |
+| Users | `/get-users` | GET | List all system users |
+| Users | `/user/register` | POST | Register a new user |
+| Users | `/update-user/:id` | PUT | Update user details |
+| Parameters | `/get-doc-types` | GET | Fetch document type configurations |
+| Parameters | `/add-doc-type` | POST | Create new document type |
+| Auth | `/user/refresh-token` | GET | Refresh session access token |
+
+### Usage Example
+
 ```typescript
-// Set API base URL via environment variable
-VITE_API_BASE_URL=https://api.yourdomain.com
+import api from '@/lib/api';
+
+// Fetching data
+const response = await api.get('/get-users');
+const users = response.data.results;
 ```
-
-### Available Services
-
-```typescript
-import { userService, documentService, approvalSetupService } from '@/lib/api';
-
-// Users
-await userService.getAll({ search: 'john', status: 'Active' });
-await userService.create({ username: 'john', email: 'john@example.com', role: 'User', status: 'Active' });
-
-// Documents
-await documentService.getAll({ status: 'DRAFT', type: 'INVOICE' });
-await documentService.submit('doc-id');
-await documentService.reject('doc-id', 'Missing information');
-
-// Approval Setup
-await approvalSetupService.create({
-  documentType: 'Invoice',
-  stages: [
-    { description: 'Manager Review', quorum: 1, approvers: ['John'], mandatoryApprovers: ['John'] }
-  ]
-});
-```
-
-### API Endpoints
-
-| Service | Endpoints |
-|---------|-----------|
-| Auth | `/auth/login`, `/auth/logout`, `/auth/refresh`, `/auth/me` |
-| Users | `/users`, `/users/:id`, `/users/search` |
-| Documents | `/documents`, `/documents/:id`, `/documents/upload`, `/documents/:id/submit`, `/documents/:id/approve`, `/documents/:id/reject` |
-| Parameters | `/parameters`, `/parameters/:id`, `/parameters/document-types` |
-| Approval Setup | `/approval-setup`, `/approval-setup/:id`, `/approval-setup/:id/stages` |
-| Beneficiaries | `/beneficiaries`, `/beneficiaries/:id`, `/beneficiaries/search` |
-| Enquiries | `/enquiries`, `/enquiries/:id`, `/enquiries/search` |
 
 ## 🎨 Theming
 
-The application supports light and dark themes using CSS custom properties.
+Supported themes: **Light** and **Dark**.
+Managed via `next-themes` and Tailwind CSS variables.
 
-### Theme Toggle
-Located in the page header, accessible from any page.
-
-### Custom Colors
-
-```css
-/* Light theme */
-:root {
-  --primary: 217 91% 50%;
-  --background: 220 20% 97%;
-  --card: 0 0% 100%;
-  /* ... */
-}
-
-/* Dark theme */
-.dark {
-  --primary: 217 91% 60%;
-  --background: 222 47% 6%;
-  --card: 222 47% 9%;
-  /* ... */
-}
-```
-
-### Status Colors
-
-- **Success/Approved**: Emerald
-- **Primary/Submitted**: Blue
-- **Warning/Pending**: Amber
-- **Destructive/Rejected**: Red
-- **Paid**: Teal
-- **Inactive**: Gray
+- **Primary Color**: Blue/Azure
+- **Success**: Emerald
+- **Warning**: Amber
+- **Destructive**: Rose
 
 ## 🔐 User Roles
 
-| Role | Description |
-|------|-------------|
-| Admin | Full system access |
-| Manager | Approval workflows, team management |
-| User | Document creation and submission |
-| Viewer | Read-only access |
+Roles are dynamically fetched from the system and assigned to users:
+- **Admin**: Full system management and configuration.
+- **Approver**: Review and approve document requests.
+- **Finance**.
+- **Originator**.
 
 ## 📱 Responsive Design
 
-- **Desktop**: Full sidebar, data tables
-- **Tablet**: Collapsible sidebar, responsive grid
-- **Mobile**: Hidden sidebar with hamburger menu, card-based tables
-
-## 🧪 Development
-
-### Code Style
-- TypeScript strict mode
-- ESLint configuration
-- Prettier formatting
-
-### Component Guidelines
-- Use shadcn/ui primitives
-- Follow atomic design principles
-- Implement loading skeletons
-- Use semantic color tokens
-
-## 📝 License
-
-This project is proprietary software.
+The UI is built with a mobile-first approach:
+- **Mobile**: Collapsible navigation and card-based data views.
+- **Desktop**: Full sidebar and comprehensive data tables.
 
 ---
-
-Built with ❤️ using React, TypeScript, and Tailwind CSS
