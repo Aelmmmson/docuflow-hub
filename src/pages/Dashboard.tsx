@@ -117,7 +117,7 @@ const Dashboard = () => {
       id: 3,
       count: 0,
       label: "File(s)",
-      title: "Unapproved",
+      title: "Pending Approval",
       color: {
         tab: "from-amber-300 to-amber-300",
         body: "bg-gradient-to-t from-amber-50 to-white dark:from-amber-950/50 dark:to-card",
