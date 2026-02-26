@@ -279,7 +279,7 @@ useEffect(() => {
       </div>
 
       {/* Charts and Recent Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-32">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-20">
         <div className="lg:col-span-1">
           <RecentDocuments recentDocs={recentDocs} />
         </div>
