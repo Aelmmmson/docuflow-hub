@@ -77,7 +77,7 @@ export default function DocumentCapture() {
             <TabsContent value="request" className="mt-4">
               <div className="rounded-xl bg-card p-4 shadow-card-md border border-border">
                 <h3 className="text-xs font-semibold text-card-foreground mb-4">Document Request Form</h3>
-                <DocumentForm 
+                <DocumentForm
                   selectedTemplate={selectedTemplate}
                   onClearTemplate={handleClearTemplate}
                   onDocumentSubmit={handleDocumentSubmit}
@@ -87,14 +87,12 @@ export default function DocumentCapture() {
 
             <TabsContent value="generated" className="mt-4">
               <div className="rounded-xl bg-card p-4 shadow-card-md border border-border">
-                <h3 className="text-xs font-semibold text-card-foreground mb-4">Draft Documents</h3>
                 <GeneratedTab externalDocuments={newDocuments} />
               </div>
             </TabsContent>
 
             <TabsContent value="enquiry" className="mt-4">
               <div className="rounded-xl bg-card p-4 shadow-card-md border border-border">
-                <h3 className="text-xs font-semibold text-card-foreground mb-4">All Documents</h3>
                 <EnquiryTab />
               </div>
             </TabsContent>

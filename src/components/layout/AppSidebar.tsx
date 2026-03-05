@@ -45,13 +45,13 @@ const baseNavigation = [
 ];
 
 // Scrolling text component
-function ScrollingText({ 
-  text, 
-  className, 
-  maxLength = 18 
-}: { 
-  text: string; 
-  className?: string; 
+function ScrollingText({
+  text,
+  className,
+  maxLength = 18
+}: {
+  text: string;
+  className?: string;
   maxLength?: number;
 }) {
   const [shouldScroll, setShouldScroll] = useState(false);
@@ -74,7 +74,7 @@ function ScrollingText({
       // Start scrolling after initial delay
       setTimeout(() => {
         setIsScrolling(true);
-        
+
         // Stop scrolling after animation completes
         setTimeout(() => {
           setIsScrolling(false);
@@ -123,8 +123,8 @@ export function AppSidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const currentUser = getCurrentUser();
-  const displayName = currentUser 
-    ? `${currentUser.first_name} ${currentUser.last_name}` 
+  const displayName = currentUser
+    ? `${currentUser.first_name} ${currentUser.last_name}`
     : "Guest";
   const displayEmail = currentUser?.email || "—";
   const displayRole = currentUser?.role_name || "—";
@@ -142,32 +142,32 @@ export function AppSidebar() {
   // Get filtered navigation based on user role
   const getFilteredNavigation = () => {
     const role = currentUser?.role_name?.toLowerCase() || "";
-    
-    switch(role) {
+
+    switch (role) {
       case "admin":
         // Admin: Can see all except Approval and Finance Approvals
-        return baseNavigation.filter(item => 
+        return baseNavigation.filter(item =>
           item.name !== "Approval" && item.name !== "Finance Approvals"
         );
-        
+
       case "approver":
         // Approver: Only Dashboard and Approval
-        return baseNavigation.filter(item => 
+        return baseNavigation.filter(item =>
           item.name === "Dashboard" || item.name === "Approval"
         );
-        
+
       case "originator":
         // Originator: Only Dashboard and Document Capture
-        return baseNavigation.filter(item => 
+        return baseNavigation.filter(item =>
           item.name === "Dashboard" || item.name === "Document Capture"
         );
-        
+
       case "finance":
         // Finance: Only Dashboard and Finance Approvals
-        return baseNavigation.filter(item => 
+        return baseNavigation.filter(item =>
           item.name === "Dashboard" || item.name === "Finance Approvals"
         );
-        
+
       default:
         // Default: Show Dashboard only for unknown roles
         return baseNavigation.filter(item => item.name === "Dashboard");
@@ -182,7 +182,7 @@ export function AppSidebar() {
       <Button
         variant="ghost"
         size="icon"
-        className="fixed top-3 left-3 z-50 lg:hidden h-9 w-9"
+        className="fixed top-3 left-3 z-[110] lg:hidden h-9 w-9"
         onClick={() => setIsMobileOpen(!isMobileOpen)}
       >
         {isMobileOpen ? (
@@ -195,7 +195,7 @@ export function AppSidebar() {
       {/* Overlay */}
       {isMobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm lg:hidden"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
@@ -203,7 +203,7 @@ export function AppSidebar() {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:z-auto rounded-r-2xl",
+          "fixed inset-y-0 left-0 z-[100] flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:z-auto rounded-r-2xl",
           isCollapsed ? "w-20" : "w-64",
           isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
@@ -274,27 +274,27 @@ export function AppSidebar() {
               <div className="flex items-center gap-3 rounded-xl bg-sidebar-accent p-3">
                 <div className="relative flex-shrink-0">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-sm font-bold shadow-lg">
-                    {displayName.split(" ").map(n => n[0]).join("") || "?"}
+                    {(displayName.split(" ").map(n => n[0]).join("") || "?").toUpperCase()}
                   </div>
                   <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-sidebar" />
                 </div>
                 <div className="flex-1 min-w-0">
                   {/* Name with scrolling - Reduced spacing */}
-                  <ScrollingText 
+                  <ScrollingText
                     text={displayName}
-                    className="text-xs font-semibold text-sidebar-foreground mb-0.5"
+                    className="text-xs font-semibold text-sidebar-foreground capitalize"
                     maxLength={18}
                   />
 
-                  {/* Email with scrolling - Reduced spacing */}
-                  <ScrollingText 
+                  {/* Email with scrolling - Tight spacing */}
+                  <ScrollingText
                     text={displayEmail}
-                    className="text-2xs text-sidebar-foreground/60 mb-0.5"
+                    className="text-2xs text-sidebar-foreground/60"
                     maxLength={22}
                   />
 
                   {/* Role – static, no scroll */}
-                  <p className="text-2xs text-sidebar-foreground/60 truncate">
+                  <p className="text-2xs text-sidebar-foreground/60 truncate capitalize">
                     {displayRole}
                   </p>
                 </div>
@@ -316,7 +316,7 @@ export function AppSidebar() {
               <div className="flex flex-col items-center gap-2">
                 <div className="relative">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-sm font-bold shadow-lg cursor-pointer">
-                    {displayName.split(" ").map(n => n[0]).join("") || "?"}
+                    {(displayName.split(" ").map(n => n[0]).join("") || "?").toUpperCase()}
                   </div>
                   <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-sidebar" />
                 </div>

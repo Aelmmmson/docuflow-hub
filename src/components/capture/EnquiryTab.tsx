@@ -30,7 +30,10 @@ import { RightAside } from "@/components/shared/RightAside";
 import { useToast } from "@/hooks/use-toast";
 import api from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
-import { DocumentCard } from "./DocumentCard"; // Make sure to import DocumentCard
+import { DocumentCard } from "./DocumentCard";
+import { DateFilter } from "@/components/shared/DateFilter";
+import { DateRange, fmtDisplay } from "@/lib/dateUtils";
+import { toTitleCase, formatAmount } from "@/lib/utils";
 
 interface Document {
   id: string | number;
@@ -71,6 +74,12 @@ interface BackendDocument {
   decline_reason?: string;   // add if your backend returns it
 }
 
+interface DocType {
+  id: number | string;
+  description: string;
+  trans_type?: string;
+}
+
 export function EnquiryTab() {
   const { toast } = useToast();
   const currentUser = getCurrentUser();
@@ -82,6 +91,7 @@ export function EnquiryTab() {
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState<DateRange | null>(null);
 
   // View aside
   const [isViewOpen, setIsViewOpen] = useState(false);
@@ -95,7 +105,7 @@ export function EnquiryTab() {
   const [isPdfViewerOpen, setIsPdfViewerOpen] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string>("");
 
-  const [documentTypes, setDocumentTypes] = useState([]);
+  const [documentTypes, setDocumentTypes] = useState<DocType[]>([]);
 
   // Fetch documents
   useEffect(() => {
@@ -123,13 +133,13 @@ export function EnquiryTab() {
 
         const mapped = raw.map((d) => ({
           id: d.id,
-          decline_reason:d.decline_reason,
+          decline_reason: d.decline_reason,
           referenceNumber: d.doc_id || `REF-${d.id}`,
           uploadDate: d.created_at
             ? new Date(d.created_at).toISOString().split("T")[0]
             : d.stage_updated_at
-            ? new Date(d.stage_updated_at).toISOString().split("T")[0]
-            : "—",
+              ? new Date(d.stage_updated_at).toISOString().split("T")[0]
+              : "—",
           type: d.doctype_name || "Unknown",
           description: d.details || "",
           status: d.status as Document["status"],
@@ -155,8 +165,8 @@ export function EnquiryTab() {
           err instanceof Error
             ? err.message
             : typeof err === "string"
-            ? err
-            : "Unknown error occurred";
+              ? err
+              : "Unknown error occurred";
 
         console.error("Failed to load documents:", errorMessage);
 
@@ -205,7 +215,19 @@ export function EnquiryTab() {
       doc.type.toLowerCase().includes(searchValue.toLowerCase());
     const matchesStatus = statusFilter === "all" || doc.status === statusFilter;
     const matchesType = typeFilter === "all" || doc.type === typeFilter;
-    return matchesSearch && matchesStatus && matchesType;
+
+    let matchesDate = true;
+    if (dateFilter) {
+      const docDateStr = doc.created_at || doc.uploadDate;
+      if (docDateStr && docDateStr !== "—") {
+        const dDate = docDateStr.split('T')[0];
+        matchesDate = dDate >= dateFilter.startDate && dDate <= dateFilter.endDate;
+      } else {
+        matchesDate = false;
+      }
+    }
+
+    return matchesSearch && matchesStatus && matchesType && matchesDate;
   });
 
   const handleView = (doc: Document) => {
@@ -289,7 +311,8 @@ export function EnquiryTab() {
     },
     { key: "referenceNumber", header: "Reference" },
     { key: "uploadDate", header: "Date" },
-    { key: "type", header: "Type" },
+    { key: "type", header: "Type", render: (doc) => <span>{toTitleCase(doc.type)}</span> },
+    { key: "amount", header: "Amount", render: (doc) => <span>{formatAmount(doc.amount)}</span> },
     { key: "description", header: "Description" },
     {
       key: "status",
@@ -298,7 +321,7 @@ export function EnquiryTab() {
     },
     {
       key: "actions",
-      header: "",
+      header: "Actions",
       className: "w-24 text-right",
       render: (doc) => (
         <div className="flex items-center justify-end gap-1">
@@ -333,28 +356,54 @@ export function EnquiryTab() {
 
   return (
     <div className="space-y-4">
-      {/* Compact Horizontal Layout - Matching Code A */}
+      {/* Header Row with View Toggle */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-foreground tracking-tight">Enquiry Documents</h2>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline-block">View:</span>
+          <div className="flex border rounded-lg overflow-hidden shadow-sm">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`h-8 px-3 rounded-none ${viewMode === "table" ? "bg-muted" : "bg-background hover:bg-muted/50"}`}
+              onClick={() => setViewMode("table")}
+            >
+              <List className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`h-8 px-3 rounded-none border-l ${viewMode === "grid" ? "bg-muted" : "bg-background hover:bg-muted/50"}`}
+              onClick={() => setViewMode("grid")}
+            >
+              <Grid className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Compact Horizontal Layout - Matches Code A (Search & Filters) */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
         {/* Search input on left */}
-        <div className="flex-1 w-20 sm:w-auto">
+        <div className="flex-1 w-full sm:w-auto">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
               placeholder="Search documents..."
-              className="pl-9 h-9 text-sm w-1/3"
+              className="pl-9 h-9 text-sm w-full sm:max-w-sm"
             />
           </div>
         </div>
-        
-        {/* Type filter, status filter, and view toggle in one row */}
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+
+        {/* Filters aligned to right on desktop */}
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto sm:ml-auto">
           {/* Status filter */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">Status:</span>
+            <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline-block">Status:</span>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-9 w-[140px] text-xs">
+              <SelectTrigger className="h-9 w-[130px] sm:w-[140px] text-xs shadow-sm bg-background">
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
@@ -367,47 +416,41 @@ export function EnquiryTab() {
               </SelectContent>
             </Select>
           </div>
-          
+
           {/* Type filter */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">Type:</span>
+            <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline-block">Type:</span>
             <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="h-9 w-[140px] text-xs">
+              <SelectTrigger className="h-9 w-[130px] sm:w-[140px] text-xs shadow-sm bg-background">
                 <SelectValue placeholder="All Types" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="all" className="text-xs">All Types</SelectItem>
                 {documentTypes.map((type) => (
-                  <SelectItem key={type.id} value={type.description}>{type.description}</SelectItem>
+                  <SelectItem key={type.id} value={type.description} className="text-xs">{toTitleCase(type.description)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          
-          {/* View toggle - compact - Aligned to right */}
-          <div className="flex items-center gap-2 ml-auto">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">View:</span>
-            <div className="flex border rounded-lg overflow-hidden">
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`h-8 px-3 rounded-none ${viewMode === "table" ? "bg-muted" : ""}`}
-                onClick={() => setViewMode("table")}
-              >
-                <List className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`h-8 px-3 rounded-none ${viewMode === "grid" ? "bg-muted" : ""}`}
-                onClick={() => setViewMode("grid")}
-              >
-                <Grid className="h-4 w-4" />
-              </Button>
-            </div>
+
+          {/* Date filter */}
+          <div className="flex items-center gap-2 sm:border-l sm:pl-3 ml-1">
+            <DateFilter onFilterChange={setDateFilter} variant="inline" allowClear />
           </div>
         </div>
       </div>
+
+      {/* Date Label (Only show if active) */}
+      {dateFilter && (
+        <p className="text-[10px] text-muted-foreground mb-1 -mt-1">
+          Showing:{" "}
+          <span className="font-semibold text-foreground">
+            {dateFilter.startDate === dateFilter.endDate
+              ? fmtDisplay(dateFilter.startDate)
+              : `${fmtDisplay(dateFilter.startDate)} \u2013 ${fmtDisplay(dateFilter.endDate)}`}
+          </span>
+        </p>
+      )}
 
       {/* Table View */}
       {viewMode === "table" && (
@@ -422,26 +465,26 @@ export function EnquiryTab() {
       )}
 
 
-{/* Grid View */}
-{viewMode === "grid" && (
-  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-    {filteredDocuments.map((doc) => (
-      <DocumentCard
-        key={doc.id}
-        document={{
-          ...doc,
-          id: String(doc.id),
-        }}
-        mode="enquiry" // Set mode to enquiry
-        onView={() => handleView(doc)}
-        onShowRejectionReason={doc.status === "REJECTED" ? () => handleShowDeclinedReason(doc) : undefined}
-        // Add onShowApprovalDetails if you have that functionality
-        onViewDocument={() => handleViewDocumentFromCard(doc)}
-        // Don't pass onEdit or onSubmit for enquiry mode
-      />
-    ))}
-  </div>
-)}
+      {/* Grid View */}
+      {viewMode === "grid" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-8 px-2">
+          {filteredDocuments.map((doc) => (
+            <DocumentCard
+              key={doc.id}
+              document={{
+                ...doc,
+                id: String(doc.id),
+              }}
+              mode="enquiry" // Set mode to enquiry
+              onView={() => handleView(doc)}
+              onShowRejectionReason={doc.status === "REJECTED" ? () => handleShowDeclinedReason(doc) : undefined}
+              // Add onShowApprovalDetails if you have that functionality
+              onViewDocument={() => handleViewDocumentFromCard(doc)}
+            // Don't pass onEdit or onSubmit for enquiry mode
+            />
+          ))}
+        </div>
+      )}
 
       {/* View Document Aside – Updated with Code A's design */}
       <RightAside
@@ -460,7 +503,7 @@ export function EnquiryTab() {
               </div>
               <div className="flex justify-between">
                 <span className="text-xs text-muted-foreground">Type</span>
-                <span className="text-xs font-medium">{viewingDoc.type}</span>
+                <span className="text-xs font-medium">{toTitleCase(viewingDoc.type)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-xs text-muted-foreground">Status</span>
@@ -473,7 +516,7 @@ export function EnquiryTab() {
               {viewingDoc.amount && (
                 <div className="flex justify-between">
                   <span className="text-xs text-muted-foreground">Requested Amount</span>
-                  <span className="text-xs font-medium">{viewingDoc.amount}</span>
+                  <span className="text-xs font-medium">{formatAmount(viewingDoc.amount)}</span>
                 </div>
               )}
               {viewingDoc.customerNumber && (
@@ -501,27 +544,27 @@ export function EnquiryTab() {
                   <span className="text-xs flex-1 truncate">Document ID: {viewingDoc.referenceNumber}</span>
                 </div>
                 <div className="flex gap-2 flex-wrap">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="h-7 text-xs flex-1 min-w-0"
                     onClick={() => handleViewDocumentInModal(viewingDoc)}
                   >
                     <Eye className="h-3 w-3 mr-1 shrink-0" />
                     <span className="truncate">View in Modal</span>
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="h-7 text-xs flex-1 min-w-0"
                     onClick={handleViewDocumentInTab}
                   >
                     <ExternalLink className="h-3 w-3 mr-1 shrink-0" />
                     <span className="truncate">View in Tab</span>
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="h-7 text-xs flex-1 min-w-0"
                     onClick={handleDownloadDocument}
                   >

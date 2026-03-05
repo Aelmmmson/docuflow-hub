@@ -224,8 +224,8 @@ export function ParametersTab() {
         const value = String(type.trans_type);
         const label =
           value === "1" ? "Transactional" :
-          value === "0" ? "Non-Transactional" :
-          "Unknown";
+            value === "0" ? "Non-Transactional" :
+              "Unknown";
         return <span className="text-sm font-medium">{label}</span>;
       },
     },
@@ -308,7 +308,7 @@ export function ParametersTab() {
           emptyMessage={loading ? "Loading parameters..." : "No parameters found"}
           isLoading={loading}
         />
-        
+
         {/* Pagination Controls */}
         {filteredTypes.length > 0 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-border">
@@ -330,7 +330,7 @@ export function ParametersTab() {
                 {startIndex + 1}-{endIndex} of {totalItems}
               </span>
             </div>
-            
+
             <div className="flex items-center space-x-2">
               <Button
                 variant="outline"
@@ -340,7 +340,7 @@ export function ParametersTab() {
               >
                 Previous
               </Button>
-              
+
               <div className="flex items-center space-x-1">
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                   let pageNum;
@@ -353,7 +353,7 @@ export function ParametersTab() {
                   } else {
                     pageNum = currentPage - 2 + i;
                   }
-                  
+
                   return (
                     <Button
                       key={pageNum}
@@ -366,7 +366,7 @@ export function ParametersTab() {
                     </Button>
                   );
                 })}
-                
+
                 {totalPages > 5 && currentPage < totalPages - 2 && (
                   <>
                     <span className="px-1">...</span>
@@ -381,7 +381,7 @@ export function ParametersTab() {
                   </>
                 )}
               </div>
-              
+
               <Button
                 variant="outline"
                 size="sm"
@@ -419,7 +419,7 @@ export function ParametersTab() {
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label htmlFor="transactional" className="text-xs font-medium">
-                Transactional type?
+                Transactional Type?
               </Label>
               <p className="text-[10px] text-muted-foreground mt-0.5">
                 Enable for financial transactions
@@ -472,13 +472,12 @@ export function ParametersTab() {
                             className="text-sm"
                           >
                             <Check
-                              className={`mr-2 h-4 w-4 ${
-                                acct.TACCT === accountNumber ? "opacity-100" : "opacity-0"
-                              }`}
+                              className={`mr-2 h-4 w-4 ${acct.TACCT === accountNumber ? "opacity-100" : "opacity-0"
+                                }`}
                             />
                             <div className="flex flex-col">
                               <span>{acct.ACCOUNT_DESCRP}</span>
-                              <span className="text-xs text-muted-foreground">{acct.TACCT}</span>
+                              <span className="text-xs text-muted-foreground group-data-[selected='true']:text-primary-foreground/80">{acct.TACCT}</span>
                             </div>
                           </CommandItem>
                         ))}

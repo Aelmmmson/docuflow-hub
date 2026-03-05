@@ -1,363 +1,219 @@
-import { Eye, Edit2, Send, ExternalLink, Calendar, FileText, AlertCircle, CheckCircle } from "lucide-react";
-import { useState, useRef } from "react";
-import { Button } from "@/components/ui/button";
+import { Eye, Edit2, Send, ExternalLink, AlertCircle, CheckCircle, FileText } from "lucide-react";
+import { useState } from "react";
+import { useTheme } from "@/components/ThemeProvider";
 import { GeneratedDocument } from "./GeneratedTab";
+import { cn, toTitleCase, formatAmount } from "@/lib/utils";
 
 interface DocumentCardProps {
   document: GeneratedDocument;
   onView: () => void;
-  onEdit?: () => void; // Optional for Enquiry
-  onSubmit?: () => void; // Optional for Enquiry
+  onEdit?: () => void;
+  onSubmit?: () => void;
   onViewDocument?: () => void;
-  onShowRejectionReason?: () => void; // New for Enquiry
-  onShowApprovalDetails?: () => void; // New for Enquiry
-  mode?: "generated" | "enquiry"; // Add mode to differentiate
+  onShowRejectionReason?: () => void;
+  onShowApprovalDetails?: () => void;
+  mode?: "generated" | "enquiry";
 }
 
-export function DocumentCard({ 
-  document, 
-  onView, 
-  onEdit, 
+export function DocumentCard({
+  document,
+  onView,
+  onEdit,
   onSubmit,
   onViewDocument,
   onShowRejectionReason,
   onShowApprovalDetails,
-  mode = "generated" // Default to generated tab behavior
+  mode = "generated"
 }: DocumentCardProps) {
-  const [isHovered, setIsHovered] = useState(false);
-  const [isImageHovered, setIsImageHovered] = useState(false);
-  const [showTooltip, setShowTooltip] = useState(false);
-  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
-  const cardRef = useRef<HTMLDivElement>(null);
-  const tooltipTimeoutRef = useRef<NodeJS.Timeout>();
+  const [showActions, setShowActions] = useState(false);
+  const { theme } = useTheme();
+  const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
 
-  const handleView = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onView();
-  };
-
-  const handleEdit = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onEdit) onEdit();
-  };
-
-  const handleSubmit = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onSubmit) onSubmit();
-  };
-
-  const handleViewDocument = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onViewDocument) {
-      onViewDocument();
-    }
-  };
-
-  const handleShowRejectionReason = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onShowRejectionReason) {
-      onShowRejectionReason();
-    }
-  };
-
-  const handleShowApprovalDetails = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onShowApprovalDetails) {
-      onShowApprovalDetails();
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!cardRef.current) return;
-    
-    const rect = cardRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    // Show tooltip when hovering over the main content area
-    const isOverContent = x > 20 && x < rect.width - 20 && y > 60 && y < rect.height - 20;
-    
-    if (isOverContent && (document.description || document.customerNumber)) {
-      setTooltipPosition({ x: e.clientX, y: e.clientY });
-      
-      // Clear existing timeout
-      if (tooltipTimeoutRef.current) {
-        clearTimeout(tooltipTimeoutRef.current);
-      }
-      
-      // Show tooltip after a brief delay (like Windows explorer)
-      tooltipTimeoutRef.current = setTimeout(() => {
-        setShowTooltip(true);
-      }, 500);
-    } else {
-      setShowTooltip(false);
-      if (tooltipTimeoutRef.current) {
-        clearTimeout(tooltipTimeoutRef.current);
-      }
-    }
-  };
-
-  const handleMouseLeave = () => {
-    setIsHovered(false);
-    setShowTooltip(false);
-    if (tooltipTimeoutRef.current) {
-      clearTimeout(tooltipTimeoutRef.current);
-    }
-  };
-
-  // Format status for the pill
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "DRAFT": return "Draft";
-      case "SUBMITTED": return "Submitted";
-      case "APPROVED": return "Approved";
-      case "REJECTED": return "Rejected";
-      case "PAID": return "Paid";
-      default: return status;
-    }
-  };
-
-  // Get status color
+  // Status mapping for the colored border
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "DRAFT": return "bg-blue-400/90 dark:bg-blue-500/90";
-      case "SUBMITTED": return "bg-orange-400/90 dark:bg-orange-500/90";
-      case "APPROVED": return "bg-green-400/90 dark:bg-green-500/90";
-      case "REJECTED": return "bg-red-400/90 dark:bg-red-500/90";
-      case "PAID": return "bg-purple-400/90 dark:bg-purple-500/90";
-      default: return "bg-gray-400/90 dark:bg-gray-500/90";
+      case "DRAFT": return "hsl(195, 74%, 62%)";
+      case "SUBMITTED": return "#F39C12";
+      case "APPROVED": return "#27AE60";
+      case "REJECTED": return "#E74C3C";
+      case "PAID": return "#8E44AD";
+      default: return "#BDC3C7";
     }
   };
 
-  // Determine which action buttons to show based on mode and document status
-  const getActionButtons = () => {
-    if (mode === "enquiry") {
-      // Enquiry mode: Show View for all, and additional buttons based on status
-      return (
-        <>
-          {/* View Details Button - Always shown */}
-          <div className="relative group/btn">
-            <button
-              onClick={handleView}
-              className="flex items-center justify-center w-6 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
-            >
-              <Eye className="w-3.5 h-3.5 text-gray-600 dark:text-gray-300" />
-            </button>
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 dark:bg-gray-700 text-white dark:text-gray-200 text-[9px] rounded whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-opacity pointer-events-none">
-              View Details
-            </div>
-          </div>
+  const statusColor = getStatusColor(document.status);
 
-          {/* Rejection Reason Button - Only for REJECTED status */}
-          {document.status === "REJECTED" && onShowRejectionReason && (
-            <div className="relative group/btn">
-              <button
-                onClick={handleShowRejectionReason}
-                className="flex items-center justify-center w-6 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
-              >
-                <AlertCircle className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
-              </button>
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 dark:bg-gray-700 text-white dark:text-gray-200 text-[9px] rounded whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-opacity pointer-events-none">
-                Rejection Reason
-              </div>
-            </div>
-          )}
+  // Theme-aware colors
+  const primaryClr = isDark ? "#1C204B" : "#FFFFFF";
+  const textClr = isDark ? "#FFFFFF" : "#1C204B";
+  const dotClr = isDark ? "#BBC0FF" : "#1C204B";
+  const borderColor = isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(28, 32, 75, 0.1)";
+  const shadowValue = isDark ? "0 10px 40px rgba(0,0,0,0.5)" : "0 10px 30px rgba(28, 32, 75, 0.1)";
 
-          {/* Approval Details Button - Only for APPROVED status */}
-          {document.status === "APPROVED" && onShowApprovalDetails && (
-            <div className="relative group/btn">
-              <button
-                onClick={handleShowApprovalDetails}
-                className="flex items-center justify-center w-6 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
-              >
-                <CheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
-              </button>
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 dark:bg-gray-700 text-white dark:text-gray-200 text-[9px] rounded whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-opacity pointer-events-none">
-                Approval Details
-              </div>
-            </div>
-          )}
-        </>
-      );
-    } else {
-      // Generated mode: Original logic for DRAFT documents
-      if (isHovered && document.status === "DRAFT") {
-        return (
-          <>
-            {/* View Details Button */}
-            <div className="relative group/btn">
-              <button
-                onClick={handleView}
-                className="flex items-center justify-center w-6 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
-              >
-                <Eye className="w-3.5 h-3.5 text-gray-600 dark:text-gray-300" />
-              </button>
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 dark:bg-gray-700 text-white dark:text-gray-200 text-[9px] rounded whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-opacity pointer-events-none">
-                View Details
-              </div>
-            </div>
-
-            {/* Edit Button */}
-            <div className="relative group/btn">
-              <button
-                onClick={handleEdit}
-                className="flex items-center justify-center w-6 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
-              >
-                <Edit2 className="w-3.5 h-3.5 text-gray-600 dark:text-gray-300" />
-              </button>
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 dark:bg-gray-700 text-white dark:text-gray-200 text-[9px] rounded whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-opacity pointer-events-none">
-                Edit
-              </div>
-            </div>
-
-            {/* Submit Button */}
-            <div className="relative group/btn">
-              <button
-                onClick={handleSubmit}
-                className="flex items-center justify-center w-6 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
-              >
-                <Send className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-              </button>
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 dark:bg-gray-700 text-white dark:text-gray-200 text-[9px] rounded whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-opacity pointer-events-none">
-                Submit
-              </div>
-            </div>
-          </>
-        );
-      }
-      return null;
-    }
-  };
-
-  // Determine when to show action buttons
-  const shouldShowActions = () => {
-    if (mode === "enquiry") {
-      // In enquiry mode, show actions for all documents on hover
-      return isHovered;
-    } else {
-      // In generated mode, only show for DRAFT documents on hover
-      return isHovered && document.status === "DRAFT";
-    }
-  };
+  // Static image section background
+  const imgBgClr = isDark ? "#282d5e" : "#F1F5F9";
 
   return (
-    <>
+    <div
+      onClick={onView}
+      style={{
+        "--primary-clr": primaryClr,
+        "--dot-clr": dotClr,
+        "--accent-clr": statusColor,
+        width: "100%",
+        height: "140px",
+        // fontFamily: "'Inter', Arial, sans-serif",
+        color: textClr,
+        display: "grid",
+        cursor: "pointer",
+        gridTemplateRows: "32px 1fr",
+      } as React.CSSProperties}
+      className="card group relative"
+    >
+      {/* Img Section (Static Background) */}
       <div
-        ref={cardRef}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        className="relative flex flex-col bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2.5 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-sm dark:hover:shadow-gray-900/30 transition-all cursor-pointer w-full max-w-[180px] group"
+        className="img-section transition-all duration-300 ease-[cubic-bezier(0.25, 0.46, 0.45, 0.94)] rounded-t-[10px] flex justify-end items-start overflow-hidden group-hover:translate-y-[0.8em] px-3 pt-2"
+        style={{ background: imgBgClr }}
       >
-        {/* Action Buttons - Top Right of Card (shows on card hover) */}
-        {shouldShowActions() && (
-          <div className="absolute -top-5 -right-3.5 flex items-center gap-1 bg-white dark:bg-gray-800 rounded-full px-2 py-1.5 shadow-md z-30 border border-gray-200 dark:border-gray-700">
-            {getActionButtons()}
-          </div>
-        )}
-        
-        {/* Status Badge - Top Left of Card */}
-        <div className="absolute -top-3 left-2 z-20">
-          <span className={`px-2 py-0.5 ${getStatusColor(document.status)} text-white text-[9px] rounded-full font-medium shadow-sm`}>
-            {getStatusText(document.status)}
-          </span>
+        <FileText
+          className="w-8 h-8 rotate-[12deg] translate-x-1 shrink-0 opacity-80"
+          style={{ color: statusColor }}
+        />
+      </div>
+
+      {/* Card Body with Status Top Border - Using explicit styles for theme reactivity */}
+      <div
+        className="card-desc rounded-[10px] p-[16px] relative top-[-10px] flex flex-col z-10 transition-all shadow-xl"
+        style={{
+          backgroundColor: primaryClr,
+          borderLeft: `1px solid ${borderColor}`,
+          borderRight: `1px solid ${borderColor}`,
+          borderBottom: `1px solid ${borderColor}`,
+          borderTop: `4px solid ${statusColor}`,
+          color: textClr
+        }}
+      >
+        {/* Dedicated Watermark Container for clipping icon only */}
+        <div className="absolute inset-0 rounded-[10px] overflow-hidden pointer-events-none z-0">
+          {/* <FileText
+            className="absolute -right-4 -bottom-6 w-32 h-32 opacity-[0.03] dark:opacity-[0.05] rotate-[15deg] select-none"
+            style={{ color: textClr }}
+            aria-hidden="true"
+          /> */}
+          <img
+            src="./file.svg"
+            className="absolute -right-4 -bottom-6 w-32 h-32 opacity-[0.03] dark:opacity-[0.05] rotate-[15deg] select-none"
+            style={{ color: textClr }}
+            aria-hidden="true"
+          />
         </div>
 
-        {/* Image/Thumbnail Section - Compact */}
-        <div 
-          className="relative w-full mb-2.5"
-          onMouseEnter={() => setIsImageHovered(true)}
-          onMouseLeave={() => setIsImageHovered(false)}
-        >
-          {/* Thumbnail Container - Simple white background */}
-          <div className="w-full h-28 flex items-start justify-start rounded-md overflow-hidden group/image bg-gray-50 dark:bg-gray-900/50">
-            {/* Image */}
-            <img 
-              src={"/file.svg"} 
-              alt={document.type} 
-              className="absolute inset-0 w-full h-full object-contain rounded-md opacity-100 group-hover/image:opacity-100 transition-opacity z-0 p-3"
-            />
-            
-            {/* View Document Overlay */}
-            {isImageHovered && document.referenceNumber && (
-              <div className="absolute inset-0 bg-black/30 dark:bg-black/40 rounded-md flex items-center justify-center transition-opacity z-20">
-                <div className="relative group/view">
-                  <button
-                    onClick={handleViewDocument}
-                    className="flex items-center justify-center w-9 h-9 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 rounded-full transition-all transform hover:scale-105"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5 text-gray-700 dark:text-gray-300" />
-                  </button>
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 dark:bg-gray-700 text-white dark:text-gray-200 text-[10px] rounded whitespace-nowrap opacity-0 group-hover/view:opacity-100 transition-opacity pointer-events-none">
-                    View Document
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Content Section - Compact */}
-        <div className="flex flex-col gap-1 flex-1 text-center">
-          {/* Document ID and Title */}
-          <div className="min-w-0">
-            <h2 className="text-gray-900 dark:text-gray-100 text-[11px] font-semibold leading-tight line-clamp-1 mb-0.5">
-              ID: {document.referenceNumber}
-            </h2>
-            <p className="text-gray-600 dark:text-gray-400 text-[10px] font-medium leading-tight line-clamp-1">
-              {document.type}
-            </p>
+        {/* Header: Title & Info Menu - z-20 for Popover overlap */}
+        <div className="flex items-center justify-between mb-4 relative z-20">
+          <div className="card-title text-[0.85em] font-medium truncate capitalize opacity-90">
+            {toTitleCase(document.type)}
           </div>
 
-          {/* Metadata - Date and Amount with reduced spacing */}
-          <div className="flex items-center justify-between text-[10px] mt-0.5">
-            {/* Date */}
-            <div className="flex items-center gap-0.5 text-gray-500 dark:text-gray-400">
-              <Calendar className="w-3 h-3 text-gray-400 dark:text-gray-500" />
-              <span>{document.uploadDate}</span>
+          {/* Actions Hover Zone (Ellipses Only) */}
+          <div
+            className="relative"
+            onMouseEnter={() => setShowActions(true)}
+            onMouseLeave={() => setShowActions(false)}
+          >
+            <div className="card-menu flex gap-[3.5px] p-2 -mr-2 cursor-pointer opacity-70 hover:opacity-100 transition-opacity">
+              <div className="dot w-[4px] h-[4px] rounded-full" style={{ backgroundColor: dotClr }}></div>
+              <div className="dot w-[4px] h-[4px] rounded-full" style={{ backgroundColor: dotClr }}></div>
+              <div className="dot w-[4px] h-[4px] rounded-full" style={{ backgroundColor: dotClr }}></div>
             </div>
 
-            {/* Amount (only show if exists) */}
-            {document.amount && (
-              <div className="flex items-center gap-0.5 font-medium text-gray-700 dark:text-gray-300">
-                <span>${document.amount}</span>
+            {/* Actions Popover */}
+            {showActions && (
+              <div
+                className="absolute right-0 top-full mt-1 border rounded-lg p-1.5 flex flex-col gap-0.5 z-50 animate-in fade-in zoom-in-95 duration-150 min-w-[125px]"
+                style={{
+                  backgroundColor: isDark ? "#252a5c" : "#FFFFFF",
+                  borderColor: borderColor,
+                  boxShadow: shadowValue
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  className="flex items-center gap-2.5 w-full px-3 py-2 text-[10px] font-semibold hover:bg-black/5 dark:hover:bg-white/10 rounded transition-colors"
+                  style={{ color: textClr }}
+                  onClick={onView}
+                >
+                  <Eye className="w-3 h-3 text-blue-500" /> View Details
+                </button>
+
+                {mode === "generated" && document.status === "DRAFT" && (
+                  <>
+                    <button
+                      className="flex items-center gap-2.5 w-full px-3 py-2 text-[10px] font-semibold hover:bg-black/5 dark:hover:bg-white/10 rounded transition-colors"
+                      style={{ color: textClr }}
+                      onClick={onEdit}
+                    >
+                      <Edit2 className="w-3 h-3 text-amber-500" /> Edit Record
+                    </button>
+                    <button
+                      className="flex items-center gap-2.5 w-full px-3 py-2 text-[10px] font-bold text-blue-500 hover:bg-blue-500/10 rounded transition-colors"
+                      onClick={onSubmit}
+                    >
+                      <Send className="w-3 h-3" /> Submit
+                    </button>
+                  </>
+                )}
+
+                {document.referenceNumber && (
+                  <button
+                    className="flex items-center gap-2.5 w-full px-3 py-2 text-[10px] font-semibold hover:bg-black/5 dark:hover:bg-white/10 rounded transition-colors"
+                    style={{ color: textClr }}
+                    onClick={onViewDocument}
+                  >
+                    <ExternalLink className="w-3 h-3" /> Open File
+                  </button>
+                )}
+
+                {mode === "enquiry" && (
+                  <>
+                    {document.status === "REJECTED" && (
+                      <button
+                        className="flex items-center gap-2.5 w-full px-3 py-2 text-[10px] font-semibold text-rose-500 hover:bg-rose-500/10 rounded transition-colors"
+                        onClick={onShowRejectionReason}
+                      >
+                        <AlertCircle className="w-3 h-3" /> Reason
+                      </button>
+                    )}
+                    {document.status === "APPROVED" && (
+                      <button
+                        className="flex items-center gap-2.5 w-full px-3 py-2 text-[10px] font-semibold text-primary hover:bg-primary/10 rounded transition-colors"
+                        onClick={onShowApprovalDetails}
+                      >
+                        <CheckCircle className="w-3 h-3" /> Details
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Content: Amount & Reference */}
+        <div className="flex flex-col flex-1 relative z-10">
+          <div className="text-[1.65em] font-medium leading-none tracking-tight mb-auto" style={{ color: textClr }}>
+            {formatAmount(document.amount)}
+          </div>
+
+          <div className="mt-auto space-y-0.5">
+            <p className="text-[0.7em] font-medium tracking-wide uppercase truncate" style={{ color: isDark ? "#BBC0FF99" : "#1C204B99" }}>
+              ID: {document.referenceNumber || "PENDING"}
+            </p>
+            <p className="text-[0.65em] font-normal italic" style={{ color: isDark ? "#BBC0FF66" : "#1C204B66" }}>
+              {document.uploadDate}
+            </p>
           </div>
         </div>
       </div>
-
-      {/* Windows Explorer-style Tooltip */}
-      {showTooltip && (document.description || document.customerNumber) && (
-        <div 
-          className="fixed z-50 bg-gray-900 dark:bg-gray-800 text-white dark:text-gray-200 text-sm rounded-lg shadow-xl p-3 max-w-xs pointer-events-none"
-          style={{
-            left: `${tooltipPosition.x + 10}px`,
-            top: `${tooltipPosition.y + 10}px`,
-          }}
-        >
-          <div className="space-y-2">
-            {/* Description */}
-            {document.description && (
-              <div>
-                <div className="text-gray-300 dark:text-gray-400 text-xs font-medium mb-1">Description:</div>
-                <div className="text-white dark:text-gray-200 text-sm leading-relaxed">{document.description}</div>
-              </div>
-            )}
-            
-            {/* Customer Number */}
-            {document.customerNumber && (
-              <div>
-                <div className="text-gray-300 dark:text-gray-400 text-xs font-medium mb-1">Customer:</div>
-                <div className="text-white dark:text-gray-200 text-sm">{document.customerNumber}</div>
-              </div>
-            )}
-          </div>
-          
-          {/* Tooltip Arrow */}
-          <div className="absolute -left-2 top-1/2 -translate-y-1/2 w-0 h-0 border-t-[6px] border-b-[6px] border-r-[6px] border-t-transparent border-b-transparent border-r-gray-900 dark:border-r-gray-800"></div>
-        </div>
-      )}
-    </>
+    </div>
   );
 }

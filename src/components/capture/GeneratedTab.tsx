@@ -33,6 +33,9 @@ import api from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
 import { FileUpload } from "./FileUpload";
 import { DocumentCard } from "./DocumentCard";
+import { DateFilter } from "@/components/shared/DateFilter";
+import { DateRange, fmtDisplay } from "@/lib/dateUtils";
+import { toTitleCase, formatAmount } from "@/lib/utils";
 
 export interface GeneratedDocument {
   id: string;
@@ -112,6 +115,7 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
   const [loading, setLoading] = useState(true);
   const [searchValue, setSearchValue] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState<DateRange | null>(null);
   const [viewMode, setViewMode] = useState<"table" | "grid">("table"); // New state for view mode
 
   // Edit aside state
@@ -143,17 +147,17 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
       setLoading(true);
       const userId = currentUser?.user_id;
       const roleName = currentUser?.role_name || 'user';
-      
+
       const response = await api.get(`/get-drafted-docs/${userId}/${roleName}`);
-      
+
       if (response.data.code === "200" && response.data.result) {
         const backendDocs = response.data.result as BackendDocument[];
         const formattedDocs: GeneratedDocument[] = backendDocs.map((doc: BackendDocument) => ({
           id: doc.id.toString(),
           referenceNumber: doc.doc_id,
-          uploadDate: doc.created_at ? new Date(doc.created_at).toISOString().split('T')[0] : 
-                     doc.stage_updated_at ? new Date(doc.stage_updated_at).toISOString().split('T')[0] : 
-                     new Date().toISOString().split('T')[0],
+          uploadDate: doc.created_at ? new Date(doc.created_at).toISOString().split('T')[0] :
+            doc.stage_updated_at ? new Date(doc.stage_updated_at).toISOString().split('T')[0] :
+              new Date().toISOString().split('T')[0],
           type: doc.doctype_name || `Document Type ${doc.doctype_id}`,
           description: doc.details || "",
           status: doc.status || "DRAFT",
@@ -169,7 +173,7 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
           stage_updated_at: doc.stage_updated_at || undefined,
           // We'll need to fetch trans_type separately or get it from documentTypes
         }));
-        
+
         setDocuments(formattedDocs);
       }
     } catch (error) {
@@ -215,7 +219,19 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
       doc.type.toLowerCase().includes(searchValue.toLowerCase()) ||
       (doc.customerNumber && doc.customerNumber.includes(searchValue));
     const matchesType = typeFilter === "all" || doc.type === typeFilter;
-    return matchesSearch && matchesType;
+
+    let matchesDate = true;
+    if (dateFilter) {
+      const docDateStr = doc.created_at || doc.uploadDate;
+      if (docDateStr && docDateStr !== "—") {
+        const dDate = docDateStr.split('T')[0];
+        matchesDate = dDate >= dateFilter.startDate && dDate <= dateFilter.endDate;
+      } else {
+        matchesDate = false;
+      }
+    }
+
+    return matchesSearch && matchesType && matchesDate;
   });
 
   const handleEdit = (doc: GeneratedDocument) => {
@@ -234,7 +250,7 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
     setEditType(value);
     const selectedType = documentTypes.find(t => t.id.toString() === value);
     setSelectedDocType(selectedType || null);
-    
+
     // Clear amount and customer number if switching to non-transactional type
     if (selectedType?.trans_type !== "1") {
       setEditAmount("");
@@ -258,7 +274,7 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
   const handleSubmit = async (doc: GeneratedDocument) => {
     try {
       const response = await api.put(`/submit-doc/${doc.id}`);
-      
+
       if (response.data.code === "200") {
         setDocuments((prev) =>
           prev.map((d) =>
@@ -292,7 +308,7 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
 
     try {
       setUpdating(true);
-      
+
       // Prepare payload based on whether it's transactional
       const payload: UpdateDocumentPayload = {
         doctype_id: editType,
@@ -314,24 +330,24 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
       }
 
       const response = await api.put(`/update-doc/${editingDoc.id}`, payload);
-      
+
       if (response.data.code === "200") {
         // Update local state
         setDocuments((prev) =>
           prev.map((d) =>
             d.id === editingDoc.id
               ? {
-                  ...d,
-                  type: documentTypes.find(t => t.id.toString() === editType)?.description || editType,
-                  description: editDescription,
-                  amount: isTransactionalDoc ? editAmount : undefined,
-                  customerNumber: isTransactionalDoc ? editCustomerNumber : undefined,
-                  doctype_id: editType,
-                }
+                ...d,
+                type: documentTypes.find(t => t.id.toString() === editType)?.description || editType,
+                description: editDescription,
+                amount: isTransactionalDoc ? editAmount : undefined,
+                customerNumber: isTransactionalDoc ? editCustomerNumber : undefined,
+                doctype_id: editType,
+              }
               : d
           )
         );
-        
+
         toast({
           title: "Document Updated",
           description: `${editingDoc.referenceNumber} has been updated.`,
@@ -418,17 +434,23 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
         </div>
       ),
     },
-    { key: "type", header: "Type", className: "text-xs" },
-    { 
-      key: "description", 
-      header: "Description", 
-      hideOnMobile: true, 
+    { key: "type", header: "Type", className: "text-xs", render: (doc) => <span>{toTitleCase(doc.type)}</span> },
+    {
+      key: "requested_amount",
+      header: "Amount",
+      className: "text-xs",
+      render: (doc) => <span>{doc.amount ? formatAmount(doc.amount) : "-"}</span>,
+    },
+    {
+      key: "description",
+      header: "Description",
+      hideOnMobile: true,
       className: "max-w-[200px] truncate text-xs",
       render: (doc) => (
         <div>
           <p className="truncate">{doc.description}</p>
           {doc.amount && (
-            <p className="text-[10px] text-muted-foreground">Amount: {doc.amount}</p>
+            <p className="text-[10px] text-muted-foreground">Amount: {formatAmount(doc.amount)}</p>
           )}
         </div>
       )
@@ -529,65 +551,85 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
 
   return (
     <div className="space-y-4">
-      {/* Compact Horizontal Layout */}
+      {/* Header Row with View Toggle */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-foreground tracking-tight">Generated Documents</h2>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline-block">View:</span>
+          <div className="flex border rounded-lg overflow-hidden shadow-sm">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`h-8 px-3 rounded-none ${viewMode === "table" ? "bg-muted" : "bg-background hover:bg-muted/50"}`}
+              onClick={() => setViewMode("table")}
+            >
+              <List className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`h-8 px-3 rounded-none border-l ${viewMode === "grid" ? "bg-muted" : "bg-background hover:bg-muted/50"}`}
+              onClick={() => setViewMode("grid")}
+            >
+              <Grid className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Compact Horizontal Layout - Search & Filters */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
         {/* Search input on left */}
-        <div className="flex-1 w-20 sm:w-auto">
+        <div className="flex-1 w-full sm:w-auto">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
               placeholder="Search draft documents..."
-              className="pl-9 h-9 text-sm w-1/3"
+              className="pl-9 h-9 text-sm w-full sm:max-w-sm"
             />
           </div>
         </div>
-        
-        {/* Type filter and view toggle in one row */}
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+
+        {/* Filters aligned to right on desktop */}
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto sm:ml-auto">
           {/* Type filter */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">Type:</span>
+            <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline-block">Type:</span>
             <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="h-9 w-[140px] text-xs">
+              <SelectTrigger className="h-9 w-[130px] sm:w-[140px] text-xs shadow-sm bg-background">
                 <SelectValue placeholder="All Types" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all" className="text-xs">All Types</SelectItem>
                 {documentTypes.map((t) => (
                   <SelectItem key={t.id} value={t.description} className="text-xs">
-                    {t.description}
+                    {toTitleCase(t.description)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          
-          {/* View toggle - compact */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">View:</span>
-            <div className="flex border rounded-lg overflow-hidden">
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`h-8 px-3 rounded-none ${viewMode === "table" ? "bg-muted" : ""}`}
-                onClick={() => setViewMode("table")}
-              >
-                <List className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`h-8 px-3 rounded-none ${viewMode === "grid" ? "bg-muted" : ""}`}
-                onClick={() => setViewMode("grid")}
-              >
-                <Grid className="h-4 w-4" />
-              </Button>
-            </div>
+
+          {/* Date filter */}
+          <div className="flex items-center gap-2 sm:border-l sm:pl-3 ml-1">
+            <DateFilter onFilterChange={setDateFilter} variant="inline" allowClear />
           </div>
         </div>
       </div>
+
+      {/* Date Label (Only show if active) */}
+      {dateFilter && (
+        <p className="text-[10px] text-muted-foreground mb-1 -mt-1">
+          Showing:{" "}
+          <span className="font-semibold text-foreground">
+            {dateFilter.startDate === dateFilter.endDate
+              ? fmtDisplay(dateFilter.startDate)
+              : `${fmtDisplay(dateFilter.startDate)} \u2013 ${fmtDisplay(dateFilter.endDate)}`}
+          </span>
+        </p>
+      )}
 
       {/* Table View */}
       {viewMode === "table" && (
@@ -603,19 +645,19 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
 
       {/* Grid View */}
       {viewMode === "grid" && (
-        
-<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-  {filteredDocuments.map((doc) => (
-    <DocumentCard
-      key={doc.id}
-      document={doc}
-      onView={() => handleView(doc)}
-      onEdit={() => handleEdit(doc)}
-      onSubmit={() => handleSubmit(doc)}
-      onViewDocument={() => handleViewDocumentInModal(doc)}
-    />
-  ))}
-</div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-8 px-2 pb-5">
+          {filteredDocuments.map((doc) => (
+            <DocumentCard
+              key={doc.id}
+              document={doc}
+              onView={() => handleView(doc)}
+              onEdit={() => handleEdit(doc)}
+              onSubmit={() => handleSubmit(doc)}
+              onViewDocument={() => handleViewDocumentInModal(doc)}
+            />
+          ))}
+        </div>
       )}
 
       {/* Edit Aside */}
@@ -662,7 +704,7 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
                 {documentTypes.map((type) => (
                   <SelectItem key={type.id} value={type.id.toString()}>
                     <div className="flex items-center justify-between">
-                      <span>{type.description}</span>
+                      <span>{toTitleCase(type.description)}</span>
                       {type.trans_type === "1" && (
                         <span className="text-[10px] text-muted-foreground ml-2">(Transactional)</span>
                       )}
@@ -673,8 +715,8 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
             </Select>
             {selectedDocType && (
               <p className="text-[10px] text-muted-foreground">
-                {selectedDocType.trans_type === "1" 
-                  ? "This is a transactional document" 
+                {selectedDocType.trans_type === "1"
+                  ? "This is a transactional document"
                   : "This is a non-transactional document"}
               </p>
             )}
@@ -740,8 +782,8 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
 
           {/* Save Button */}
           <div className="pt-4">
-            <Button 
-              onClick={handleSaveEdit} 
+            <Button
+              onClick={handleSaveEdit}
               className="w-full"
               disabled={updating || !editType || !editDescription.trim()}
             >
@@ -767,7 +809,7 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
               </div>
               <div className="flex justify-between">
                 <span className="text-xs text-muted-foreground">Type</span>
-                <span className="text-xs font-medium">{viewingDoc.type}</span>
+                <span className="text-xs font-medium">{toTitleCase(viewingDoc.type)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-xs text-muted-foreground">Status</span>
@@ -780,7 +822,7 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
               {viewingDoc.amount && (
                 <div className="flex justify-between">
                   <span className="text-xs text-muted-foreground">Requested Amount</span>
-                  <span className="text-xs font-medium">{viewingDoc.amount}</span>
+                  <span className="text-xs font-medium">{formatAmount(viewingDoc.amount)}</span>
                 </div>
               )}
               {viewingDoc.customerNumber && (
@@ -806,27 +848,27 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
                   <span className="text-xs flex-1">Document ID: {viewingDoc.referenceNumber}</span>
                 </div>
                 <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="h-7 text-xs flex-1"
                     onClick={() => handleViewDocumentInModal(viewingDoc)}
                   >
                     <Eye className="h-3 w-3 mr-1" />
                     View in Modal
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="h-7 text-xs flex-1"
                     onClick={handleViewDocumentInTab}
                   >
                     <ExternalLink className="h-3 w-3 mr-1" />
                     View in New Tab
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="h-7 text-xs flex-1"
                     onClick={handleDownloadDocument}
                   >

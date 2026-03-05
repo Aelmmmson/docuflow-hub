@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { User, Key, Eye, EyeOff, Shield } from "lucide-react";
 import { motion } from "framer-motion";
@@ -31,7 +31,190 @@ type LoginResponse = {
   code: string;
 };
 
+// ────────────────────────────────────────────────────────────────
+//  Expense-themed decorative background for the right panel
+// ────────────────────────────────────────────────────────────────
+
+/** A single mini expense card that floats in the background */
+function MiniCard({
+  style,
+  children,
+}: {
+  style?: React.CSSProperties;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="absolute rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm shadow-lg px-3 py-2.5 pointer-events-none select-none"
+      style={style}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ExpenseBackground() {
+  // deterministic "random" positions so there is no hydration drift
+  const dots = useMemo(
+    () =>
+      Array.from({ length: 18 }, (_, i) => ({
+        top: `${(i * 17 + 5) % 98}%`,
+        left: `${(i * 23 + 8) % 97}%`,
+        delay: `${(i * 0.4) % 3}s`,
+        size: i % 3 === 0 ? "w-1.5 h-1.5" : "w-1 h-1",
+        opacity: i % 4 === 0 ? "opacity-20" : "opacity-10",
+      })),
+    []
+  );
+
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+
+      {/* ── Glowing blobs ──────────────────────────────────────── */}
+      <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-blue-400/10 blur-3xl" />
+      <div className="absolute bottom-10 -left-16 w-64 h-64 rounded-full bg-emerald-400/10 blur-3xl" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-violet-400/5 blur-3xl" />
+
+      {/* ── Dot grid ───────────────────────────────────────────── */}
+      {dots.map((d, i) => (
+        <span
+          key={i}
+          className={`absolute rounded-full bg-foreground ${d.size} ${d.opacity}`}
+          style={{ top: d.top, left: d.left }}
+        />
+      ))}
+
+      {/* ── Currency symbols ───────────────────────────────────── */}
+      {(
+        [
+          { sym: "$", top: "8%", left: "6%", sz: "text-5xl", op: "opacity-[0.04]", delay: "0s" },
+          { sym: "¢", top: "52%", left: "88%", sz: "text-6xl", op: "opacity-[0.04]", delay: "1.2s" },
+          { sym: "€", top: "75%", left: "15%", sz: "text-4xl", op: "opacity-[0.035]", delay: "0.6s" },
+          { sym: "£", top: "20%", left: "92%", sz: "text-5xl", op: "opacity-[0.035]", delay: "1.8s" },
+        ] as const
+      ).map(({ sym, top, left, sz, op, delay }) => (
+        <span
+          key={sym}
+          className={`absolute font-bold text-foreground ${sz} ${op} animate-pulse`}
+          style={{ top, left, animationDelay: delay, animationDuration: "4s" }}
+        >
+          {sym}
+        </span>
+      ))}
+
+      {/* ── Floating mini-cards ────────────────────────────────── */}
+
+      {/* Receipt card — top-right, partially off-screen */}
+      <MiniCard
+        style={{
+          top: "8%",
+          right: "-20px",
+          transform: "rotate(3deg)",
+          animation: "floatCard1 7s ease-in-out infinite",
+          opacity: 0,
+          animationFillMode: "forwards",
+          animationDelay: "0.4s",
+        }}
+      >
+        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Expense Receipt</p>
+        <div className="space-y-2 w-48">
+          {[["Office Supplies", "$4,200"], ["Travel Claim", "$12,500"], ["Utilities", "$8,750"], ["Logistics", "$3,800"]].map(([k, v]) => (
+            <div key={k} className="flex items-center justify-between">
+              <span className="text-[11px] text-muted-foreground">{k}</span>
+              <span className="text-[11px] font-semibold text-foreground">{v}</span>
+            </div>
+          ))}
+          <div className="mt-2 pt-2 border-t border-border/60 flex justify-between">
+            <span className="text-xs font-bold text-foreground">Total</span>
+            <span className="text-xs font-bold text-emerald-500">$29,250</span>
+          </div>
+        </div>
+      </MiniCard>
+
+      {/* Bar chart card — upper-left, partially off-screen */}
+      <MiniCard
+        style={{
+          top: "28%",
+          left: "-20px",
+          transform: "rotate(-2.5deg)",
+          animation: "floatCard2 8s ease-in-out infinite",
+          opacity: 0,
+          animationFillMode: "forwards",
+          animationDelay: "1s",
+        }}
+      >
+        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Weekly Expenses</p>
+        <div className="flex items-end gap-1.5 h-16 w-44">
+          {[0.4, 0.7, 0.5, 0.9, 0.6, 0.8, 0.55].map((h, i) => (
+            <div
+              key={i}
+              className="flex-1 rounded-t"
+              style={{
+                height: `${h * 100}%`,
+                background: `hsl(${210 + i * 15}, 80%, ${55 + i * 3}%)`,
+                opacity: 0.8,
+              }}
+            />
+          ))}
+        </div>
+        <div className="flex justify-between mt-1.5">
+          {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
+            <span key={i} className="text-[9px] text-muted-foreground flex-1 text-center">{d}</span>
+          ))}
+        </div>
+      </MiniCard>
+
+      {/* Budget donut — lower-right corner, partially off-screen */}
+      <MiniCard
+        style={{
+          bottom: "6%",
+          right: "-20px",
+          transform: "rotate(2deg)",
+          animation: "floatCard3 10s ease-in-out infinite",
+          opacity: 0,
+          animationFillMode: "forwards",
+          animationDelay: "1.8s",
+        }}
+      >
+        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Monthly Budget</p>
+        <div className="flex items-center gap-4">
+          <svg viewBox="0 0 36 36" className="w-16 h-16 -rotate-90 shrink-0">
+            <circle cx="18" cy="18" r="14" fill="none" stroke="currentColor" strokeWidth="3.5" className="text-muted/30" />
+            <circle cx="18" cy="18" r="14" fill="none" stroke="currentColor" strokeWidth="3.5"
+              strokeDasharray="62 88" strokeLinecap="round" className="text-blue-400" />
+          </svg>
+          <div>
+            <p className="text-2xl font-bold text-foreground leading-tight">68%</p>
+            <p className="text-[10px] text-muted-foreground">of monthly cap used</p>
+            <p className="text-[10px] font-semibold text-emerald-500 mt-0.5">$32,000 remaining</p>
+          </div>
+        </div>
+      </MiniCard>
+
+      {/* Inline keyframes */}
+      <style>{`
+        @keyframes floatCard1 {
+          0%   { transform: rotate(3deg) translateY(0px);   opacity: 0.44; }
+          50%  { transform: rotate(3deg) translateY(-12px); opacity: 0.54; }
+          100% { transform: rotate(3deg) translateY(0px);   opacity: 0.44; }
+        }
+        @keyframes floatCard2 {
+          0%   { transform: rotate(-2.5deg) translateY(0px);   opacity: 0.42; }
+          50%  { transform: rotate(-2.5deg) translateY(-14px); opacity: 0.52; }
+          100% { transform: rotate(-2.5deg) translateY(0px);   opacity: 0.42; }
+        }
+        @keyframes floatCard3 {
+          0%   { transform: rotate(2deg) translateY(0px);   opacity: 0.40; }
+          50%  { transform: rotate(2deg) translateY(-10px); opacity: 0.50; }
+          100% { transform: rotate(2deg) translateY(0px);   opacity: 0.40; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 export default function Login() {
+
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -203,7 +386,10 @@ export default function Login() {
       </motion.div>
 
       {/* Right Column - Login Form */}
-      <div className="flex-1 lg:w-[60%] flex items-center justify-center p-4 lg:p-6 pt-10 lg:pt-6">
+      <div className="flex-1 lg:w-[60%] flex items-center justify-center p-4 lg:p-6 pt-10 lg:pt-6 relative overflow-hidden">
+
+        {/* ── Expense-themed decorative background ───────────────────────── */}
+        <ExpenseBackground />
         <div className="w-full max-w-lg">
           <motion.div
             initial={{ opacity: 0, x: 50 }}
@@ -288,9 +474,8 @@ export default function Login() {
                       <button
                         type="submit"
                         disabled={loading}
-                        className={`px-6 py-2 rounded-md bg-blue-600 text-white font-medium shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all ${
-                          loading ? "opacity-60 cursor-not-allowed" : "hover:shadow-lg active:translate-y-px"
-                        }`}
+                        className={`px-6 py-2 rounded-md bg-blue-600 text-white font-medium shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all ${loading ? "opacity-60 cursor-not-allowed" : "hover:shadow-lg active:translate-y-px"
+                          }`}
                       >
                         {loading ? "Signing in..." : "Sign In"}
                       </button>
@@ -300,7 +485,7 @@ export default function Login() {
               </div>
 
               <p className="text-center text-sm text-muted-foreground/80 mt-6 italic">
-                Powered by <span className="font-semibold">x100</span>
+                Powered by <span className="font-semibold">USG®</span>
               </p>
             </div>
           </motion.div>

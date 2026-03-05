@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -29,7 +30,7 @@ import { SearchFilter } from "@/components/shared/SearchFilter";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { RightAside } from "@/components/shared/RightAside";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+import { cn, getErrorMessage } from "@/lib/utils";
 import api from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -267,19 +268,9 @@ export function ApprovalSetupTab() {
       setIsAsideOpen(false);
     } catch (err: unknown) {
       console.error("Error saving approval setup:", err);
-
-      let message = "Failed to save approval setup. Please try again.";
-
-      if (err && typeof err === "object" && "response" in err) {
-        const axiosError = err as { response?: { data?: { message?: string } } };
-        message = axiosError.response?.data?.message || message;
-      } else if (err instanceof Error) {
-        message = err.message;
-      }
-
       toast({
         title: "Error",
-        description: message,
+        description: getErrorMessage(err, "Failed to save approval setup. Please try again."),
         variant: "destructive",
       });
     }
@@ -350,7 +341,7 @@ export function ApprovalSetupTab() {
         console.error("Failed to fetch available document types:", err);
         toast({
           title: "Warning",
-          description: "Could not load available document types.",
+          description: getErrorMessage(err, "Could not load available document types."),
           variant: "destructive",
         });
       }
@@ -369,7 +360,7 @@ export function ApprovalSetupTab() {
         console.error("Failed to fetch approvers:", err);
         toast({
           title: "Warning",
-          description: "Could not load approvers list.",
+          description: getErrorMessage(err, "Could not load approvers list."),
           variant: "destructive",
         });
       }
@@ -387,7 +378,7 @@ export function ApprovalSetupTab() {
       console.error("Failed to fetch approval setups:", err);
       toast({
         title: "Error",
-        description: "Could not load approval setups.",
+        description: getErrorMessage(err, "Could not load approval setups."),
         variant: "destructive",
       });
     }
@@ -402,7 +393,7 @@ export function ApprovalSetupTab() {
     {
       key: "description",
       header: "Document Type",
-      render: (setup) => <span>{setup.description}</span>,
+      render: (setup) => <span className="capitalize">{setup.description}</span>,
     },
     {
       key: "stages",
@@ -509,14 +500,14 @@ export function ApprovalSetupTab() {
                   </SelectTrigger>
                   <SelectContent>
                     {availableDocumentTypes.map((type) => (
-                      <SelectItem key={type.id} value={type.id}>
+                      <SelectItem key={type.id} value={type.id} className="capitalize">
                         {type.description}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {documentType && (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground capitalize">
                     Selected: {availableDocumentTypes.find((t) => t.id === documentType)?.description}
                   </p>
                 )}
@@ -637,6 +628,10 @@ export function ApprovalSetupTab() {
                         )}
                       >
                         <div className="flex items-center gap-2">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleApprover(currentStep - 1, approver.name)}
+                          />
                           <div
                             className={cn(
                               "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold",
@@ -646,11 +641,11 @@ export function ApprovalSetupTab() {
                             {approver.name
                               .split(" ")
                               .map((n) => n[0])
-                              .join("")}
+                              .join("")
+                              .toUpperCase()}
                           </div>
-                          <span className="text-xs">{approver.name}</span>
+                          <span className="text-xs capitalize">{approver.name}</span>
                         </div>
-                        {isSelected && <Check className="h-4 w-4 text-primary" />}
                       </div>
                     );
                   })}
@@ -658,7 +653,7 @@ export function ApprovalSetupTab() {
                 {stages[currentStep - 1].approvers.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-2">
                     {stages[currentStep - 1].approvers.map((name) => (
-                      <Badge key={name} variant="secondary" className="text-[10px]">
+                      <Badge key={name} variant="secondary" className="text-[10px] capitalize">
                         {name}
                       </Badge>
                     ))}
@@ -684,27 +679,52 @@ export function ApprovalSetupTab() {
                   )}
 
                   <div className="border border-border rounded-lg p-3 space-y-2">
-                    {stages[currentStep - 1].approvers.map((approverName) => {
-                      const isMandatory = stages[currentStep - 1].mandatoryApprovers.includes(approverName);
-                      const isDisabled =
-                        !isMandatory && stages[currentStep - 1].mandatoryApprovers.length >= stages[currentStep - 1].quorum;
-                      return (
-                        <div key={approverName} className={cn("flex items-center gap-2", isDisabled && "opacity-50")}>
-                          <Checkbox
-                            id={`mandatory-${approverName}`}
-                            checked={isMandatory}
-                            disabled={isDisabled}
-                            onCheckedChange={() => toggleMandatory(currentStep - 1, approverName)}
-                          />
-                          <Label
-                            htmlFor={`mandatory-${approverName}`}
-                            className={cn("text-xs font-normal", isDisabled ? "cursor-not-allowed" : "cursor-pointer")}
-                          >
-                            {approverName}
-                          </Label>
-                        </div>
-                      );
-                    })}
+                    {stages[currentStep - 1].quorum === 1 ? (
+                      <RadioGroup
+                        value={stages[currentStep - 1].mandatoryApprovers[0] || ""}
+                        onValueChange={(val) => {
+                          updateStage(currentStep - 1, {
+                            mandatoryApprovers: [val],
+                          });
+                        }}
+                      >
+                        {stages[currentStep - 1].approvers.map((approverName) => (
+                          <div key={approverName} className="flex items-center gap-2">
+                            <RadioGroupItem value={approverName} id={`mandatory-${approverName}`} />
+                            <Label
+                              htmlFor={`mandatory-${approverName}`}
+                              className="text-xs font-normal capitalize cursor-pointer"
+                            >
+                              {approverName}
+                            </Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    ) : (
+                      <>
+                        {stages[currentStep - 1].approvers.map((approverName) => {
+                          const isMandatory = stages[currentStep - 1].mandatoryApprovers.includes(approverName);
+                          const isDisabled =
+                            !isMandatory && stages[currentStep - 1].mandatoryApprovers.length >= stages[currentStep - 1].quorum;
+                          return (
+                            <div key={approverName} className={cn("flex items-center gap-2", isDisabled && "opacity-50")}>
+                              <Checkbox
+                                id={`mandatory-${approverName}`}
+                                checked={isMandatory}
+                                disabled={isDisabled}
+                                onCheckedChange={() => toggleMandatory(currentStep - 1, approverName)}
+                              />
+                              <Label
+                                htmlFor={`mandatory-${approverName}`}
+                                className={cn("text-xs font-normal capitalize", isDisabled ? "cursor-not-allowed" : "cursor-pointer")}
+                              >
+                                {approverName}
+                              </Label>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
                   </div>
                   <p className="text-[10px] text-muted-foreground">
                     Selected: {stages[currentStep - 1].mandatoryApprovers.length} / {stages[currentStep - 1].quorum} (max)
@@ -725,8 +745,8 @@ export function ApprovalSetupTab() {
                   i === currentStep
                     ? "w-6 bg-primary"
                     : i < currentStep
-                    ? "bg-primary/50"
-                    : "bg-muted"
+                      ? "bg-primary/50"
+                      : "bg-muted"
                 )}
               />
             ))}
@@ -771,7 +791,7 @@ export function ApprovalSetupTab() {
               </div>
               <div className="flex justify-between">
                 <span className="text-xs text-muted-foreground">Document Type</span>
-                <span className="text-xs font-medium">{viewingSetup.description}</span>
+                <span className="text-xs font-medium capitalize">{viewingSetup.description}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-xs text-muted-foreground">Total Approvers</span>
@@ -818,7 +838,7 @@ export function ApprovalSetupTab() {
                           <Badge
                             key={approver.userId}
                             variant={approver.isMandatory ? "default" : "secondary"}
-                            className="text-[10px]"
+                            className="text-[10px] capitalize"
                           >
                             {approver.name}
                             {approver.isMandatory && " *"}

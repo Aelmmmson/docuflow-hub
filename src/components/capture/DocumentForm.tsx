@@ -28,6 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import api from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
 import { FileUpload } from "./FileUpload";
+import { toTitleCase } from "@/lib/utils";
 
 interface DocType {
   id: number | string;
@@ -107,13 +108,13 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
     if (selectedTemplate) {
       const templateType = selectedTemplate.documentType || "";
       setDocumentType(templateType);
-      
+
       // Find and set the selected document type for transactional check
       const selectedType = documentTypes.find(t => t.id.toString() === templateType);
       if (selectedType) {
         setSelectedDocType(selectedType);
       }
-      
+
       setDetails(selectedTemplate.defaultDescription || "");
     }
   }, [selectedTemplate, documentTypes]);
@@ -123,7 +124,7 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
     setDocumentType(value);
     const selectedType = documentTypes.find(t => t.id.toString() === value);
     setSelectedDocType(selectedType || null);
-    
+
     // Clear amount and customer number if switching to non-transactional type
     if (selectedType?.trans_type !== "1") {
       setAmount("");
@@ -134,12 +135,12 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
   const handleFileSelect = (selectedFile: File | null) => {
     if (selectedFile && selectedFile.type === "application/pdf") {
       setFile(selectedFile);
-      
+
       // Only show preview modal if we haven't uploaded yet
       if (!documentId) {
         setShowPreviewModal(true);
       }
-      
+
       setUploadProgress(0);
     } else if (selectedFile) {
       toast({
@@ -216,7 +217,7 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
       }
 
       setDocumentId(returnedDocId);
-      
+
       toast({
         title: "Upload Successful",
         description: `Document ID: ${returnedDocId}`,
@@ -243,7 +244,7 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
         description: message,
         variant: "destructive",
       });
-      
+
       setUploading(false);
     }
   };
@@ -363,9 +364,9 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
                   {documentTypes.map((type) => (
                     <SelectItem key={type.id} value={String(type.id)} className="text-xs">
                       <div className="flex items-center justify-between">
-                        <span>{type.description}</span>
+                        <span>{toTitleCase(type.description)}</span>
                         {type.trans_type === "1" && (
-                          <span className="text-[10px] text-muted-foreground ml-2">(Transactional)</span>
+                          <span className="text-[10px] text-muted-foreground group-focus:text-primary-foreground/80 ml-2">(Transactional)</span>
                         )}
                       </div>
                     </SelectItem>
@@ -375,8 +376,8 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
             )}
             {selectedDocType && (
               <p className="text-[10px] text-muted-foreground mt-1">
-                {selectedDocType.trans_type === "1" 
-                  ? "This is a transactional document" 
+                {selectedDocType.trans_type === "1"
+                  ? "This is a transactional document"
                   : "This is a non-transactional document"}
               </p>
             )}
@@ -470,7 +471,7 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
         {/* Action Buttons */}
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={handleClear}>
-            Clear
+            Clearss
           </Button>
           <Button
             onClick={handleSaveDraft}
@@ -489,8 +490,8 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
               {documentId ? "Document Preview" : "Preview & Upload"}
             </DialogTitle>
             <DialogDescription>
-              {documentId 
-                ? "Viewing uploaded document" 
+              {documentId
+                ? "Viewing uploaded document"
                 : "Preview your document before uploading"}
             </DialogDescription>
           </DialogHeader>

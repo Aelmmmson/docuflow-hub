@@ -25,6 +25,7 @@ import { RightAside } from "@/components/shared/RightAside";
 import { useToast } from "@/hooks/use-toast";
 import api from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
+import { toTitleCase, getErrorMessage } from "@/lib/utils";
 
 // ────────────────────────────────────────────────
 //  Types
@@ -82,32 +83,32 @@ export function BeneficiaryTab() {
       const res = await api.get("/get-all-beneficiary-accounts");
       const raw: RawBeneficiary[] = res.data.accounts || [];
 
-// 1. In loadBeneficiaries – improved mapping with type safety
-const mapped = raw.map((b) => {
-  // Normalize status (handles both string "1"/"0" and number)
-  const statusValue = typeof b.status === 'string' ? parseInt(b.status, 10) : b.status;
-  const displayStatus = statusValue === 1 ? 'Active' : 'Inactive' as const; // ← key fix
+      // 1. In loadBeneficiaries – improved mapping with type safety
+      const mapped = raw.map((b) => {
+        // Normalize status (handles both string "1"/"0" and number)
+        const statusValue = typeof b.status === 'string' ? parseInt(b.status, 10) : b.status;
+        const displayStatus = statusValue === 1 ? 'Active' : 'Inactive' as const; // ← key fix
 
-return {
-  id: b.id,
-  name: b.beneficiary_name,
-  accountNumber: b.account_number,
-  description: b.description || "",
-  status: statusValue === 1 ? "Active" : "Inactive",
-} satisfies DisplayBeneficiary;    // or use as DisplayBeneficiary
-});
+        return {
+          id: b.id,
+          name: b.beneficiary_name,
+          accountNumber: b.account_number,
+          description: b.description || "",
+          status: statusValue === 1 ? "Active" : "Inactive",
+        } satisfies DisplayBeneficiary;    // or use as DisplayBeneficiary
+      });
 
       setBeneficiaries(mapped);
     } catch (err: unknown) {
-  console.error("Failed to load beneficiaries:", err);
-  toast({
-    title: "Error",
-    description: "Could not load beneficiaries.",
-    variant: "destructive",
-  });
-} finally {
-  setLoading(false);
-}
+      console.error("Failed to load beneficiaries:", err);
+      toast({
+        title: "Error",
+        description: getErrorMessage(err, "Could not load beneficiaries"),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -189,31 +190,20 @@ return {
       await loadBeneficiaries();
       setIsAsideOpen(false);
     } catch (err: unknown) {
-  console.error("Save failed:", err);
-
-  let msg = editingBeneficiary
-    ? "Failed to update beneficiary."
-    : "Failed to create beneficiary.";
-
-  // Safe narrowing
-  if (err && typeof err === 'object' && 'response' in err) {
-    const axiosError = err as { response?: { data?: { message?: string } } };
-    msg = axiosError.response?.data?.message || msg;
-  }
-
-  toast({
-    title: "Error",
-    description: msg,
-    variant: "destructive",
-  });
-} finally {
-  setSaving(false);
-}
+      console.error("Save failed:", err);
+      toast({
+        title: "Error",
+        description: getErrorMessage(err, "Failed to save beneficiary"),
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const columns: Column<DisplayBeneficiary>[] = [
     { key: "id", header: "ID", className: "w-20" },
-    { key: "name", header: "Beneficiary Name" },
+    { key: "name", header: "Beneficiary Name", render: (ben) => <span>{toTitleCase(ben.name)}</span> },
     { key: "accountNumber", header: "Account Number", hideOnMobile: true },
     { key: "description", header: "Description", hideOnMobile: true },
     {
@@ -223,18 +213,18 @@ return {
     },
     {
       key: "actions",
-      header: "",
-      className: "w-12",
+      header: "Action",
+      className: "w-16",
       render: (ben) => (
-        <ActionMenu
-          actions={[
-            {
-              label: "Edit",
-              icon: <Edit2 className="h-3 w-3" />,
-              onClick: () => handleEdit(ben),
-            },
-          ]}
-        />
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={() => handleEdit(ben)}
+          title="Edit beneficiary"
+        >
+          <Edit2 className="h-4 w-4" />
+        </Button>
       ),
     },
   ];
@@ -285,9 +275,10 @@ return {
         title={editingBeneficiary ? "Edit Beneficiary" : "Add New Beneficiary"}
         subtitle={
           editingBeneficiary
-            ? `Editing ${editingBeneficiary.name}`
+            ? `Editing ${toTitleCase(editingBeneficiary.name)}`
             : "Create a new beneficiary"
         }
+        subtitleClassName="capitalize"
       >
         <div className="space-y-4">
           <div className="space-y-2">
@@ -360,8 +351,8 @@ return {
               {saving
                 ? "Saving..."
                 : editingBeneficiary
-                ? "Update Beneficiary"
-                : "Save Beneficiary"}
+                  ? "Update Beneficiary"
+                  : "Save Beneficiary"}
             </Button>
           </div>
         </div>

@@ -6,9 +6,12 @@
  */
 
 import { useState, useEffect } from "react";
-import { Plus, Edit2, UserPlus } from "lucide-react";
+import { Plus, Edit2, UserPlus, Check, ChevronsUpDown } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -16,6 +19,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { SearchFilter } from "@/components/shared/SearchFilter";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -23,6 +39,7 @@ import { RightAside } from "@/components/shared/RightAside";
 import { useToast } from "@/hooks/use-toast";
 import api from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
+import { toTitleCase, getErrorMessage, cn } from "@/lib/utils";
 
 // ────────────────────────────────────────────────
 //  Types
@@ -45,15 +62,14 @@ interface Role {
   name: string;
 }
 
-// Temporary mock employees (replace with real API later)
-const mockEmployees = [
-  { id: "EMP001", name: "John Doe", email: "john.doe@company.com" },
-  { id: "EMP002", name: "Jane Smith", email: "jane.smith@company.com" },
-  { id: "EMP003", name: "Bob Wilson", email: "bob.wilson@company.com" },
-  { id: "EMP004", name: "Alice Brown", email: "alice.brown@company.com" },
-  { id: "EMP005", name: "Charlie Davis", email: "charlie.davis@company.com" },
-  { id: "EMP006", name: "Henry Amoh", email: "hnramoh3@gmail.com" },
-];
+interface ApiEmployee {
+  id: string;
+  employee_id: string;
+  first_name: string;
+  last_name: string;
+  work_email: string;
+  mobile_phone: string;
+}
 
 export function UsersTab() {
   const { toast } = useToast();
@@ -65,7 +81,7 @@ export function UsersTab() {
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [roleFilter, setRoleFilter] = useState("all");
-  
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -76,6 +92,17 @@ export function UsersTab() {
   const [selectedEmployee, setSelectedEmployee] = useState("");
   const [selectedRole, setSelectedRole] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("Active");
+  const [phone, setPhone] = useState("");
+  const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
+
+  const { data: apiEmployees = [], isLoading: isLoadingEmployees } = useQuery({
+    queryKey: ["employees"],
+    queryFn: async () => {
+      const res = await axios.get<ApiEmployee[]>("http://10.203.14.169/hr/api/employees_rest.php");
+      return res.data;
+    },
+    staleTime: 10 * 60 * 1000, // 10 minutes cache
+  });
 
   // useEffect fetch block
   useEffect(() => {
@@ -96,10 +123,9 @@ export function UsersTab() {
         }
       } catch (err: unknown) {
         console.error("Fetch failed:", err);
-        const message = err instanceof Error ? err.message : "Unknown error";
         toast({
           title: "Error",
-          description: `Could not load users or roles: ${message}`,
+          description: `Could not load users or roles: ${getErrorMessage(err)}`,
           variant: "destructive",
         });
       } finally {
@@ -133,15 +159,17 @@ export function UsersTab() {
     setSelectedEmployee("");
     setSelectedRole("");
     setSelectedStatus("Active");
+    setPhone("");
     setIsAsideOpen(true);
   };
 
   const handleEdit = (user: User) => {
     setEditingUser(user);
-    const matched = mockEmployees.find((e) => e.email === user.email);
+    const matched = apiEmployees.find((e) => e.work_email === user.email);
     setSelectedEmployee(matched?.id || "");
     setSelectedRole(user.role);
     setSelectedStatus(user.status);
+    setPhone(user.phone || matched?.mobile_phone || "");
     setIsAsideOpen(true);
   };
 
@@ -155,19 +183,15 @@ export function UsersTab() {
       return;
     }
 
-    const emp = mockEmployees.find((e) => e.id === selectedEmployee);
+    const emp = apiEmployees.find((e) => e.id === selectedEmployee);
     if (!emp) return;
 
-    const nameParts = emp.name.trim().split(/\s+/);
-    const first_name = nameParts[0] || "";
-    const last_name = nameParts.slice(1).join(" ") || "Unknown";
-
     const payload = {
-      first_name,
-      last_name,
-      email: emp.email,
-      employee_id: selectedEmployee,
-      phone: "", // empty string to satisfy NOT NULL constraint
+      first_name: emp.first_name || "",
+      last_name: emp.last_name || "Unknown",
+      email: emp.work_email,
+      employee_id: emp.employee_id,
+      phone: phone || emp.mobile_phone || `024${Math.floor(1000000 + Math.random() * 9000000)}`, // Unique fallback
       role: selectedRole,
       status: selectedStatus === "Active" ? "1" : "0",
       posted_by: currentUser?.user_id || 1,
@@ -183,7 +207,7 @@ export function UsersTab() {
           posted_by: currentUser?.user_id || 1,
           role: selectedRole,
           status: payload.status,
-          // phone: editingUser.phone || "", // if needed
+          phone: payload.phone,
         });
         toast({ title: "Success", description: "User updated." });
       } else {
@@ -201,10 +225,9 @@ export function UsersTab() {
       setIsAsideOpen(false);
     } catch (err: unknown) {
       console.error("Save failed:", err);
-      const message = err instanceof Error ? err.message : "Failed to save user.";
       toast({
         title: "Error",
-        description: message,
+        description: getErrorMessage(err, "Failed to save user."),
         variant: "destructive",
       });
     }
@@ -215,10 +238,14 @@ export function UsersTab() {
     {
       key: "name",
       header: "Name",
-      render: (u) => `${u.first_name} ${u.last_name}`,
+      render: (u) => <span>{toTitleCase(`${u.first_name} ${u.last_name}`)}</span>,
     },
     { key: "email", header: "Email", hideOnMobile: true },
-    { key: "role", header: "Role" },
+    {
+      key: "role",
+      header: "Role",
+      render: (u) => <span className="capitalize">{u.role}</span>
+    },
     {
       key: "status",
       header: "Status",
@@ -282,7 +309,7 @@ export function UsersTab() {
               onChange: setRoleFilter,
               options: [
                 { value: "all", label: "All Roles" },
-                ...roles.map((r) => ({ value: r.name, label: r.name })),
+                ...roles.map((r) => ({ value: r.name, label: toTitleCase(r.name) })),
               ],
             },
           ]}
@@ -301,7 +328,7 @@ export function UsersTab() {
           emptyMessage={loading ? "Loading users..." : "No users found"}
           isLoading={loading}
         />
-        
+
         {/* Pagination Controls */}
         {filteredUsers.length > 0 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-border">
@@ -323,7 +350,7 @@ export function UsersTab() {
                 {startIndex + 1}-{endIndex} of {totalItems}
               </span>
             </div>
-            
+
             <div className="flex items-center space-x-2">
               <Button
                 variant="outline"
@@ -333,7 +360,7 @@ export function UsersTab() {
               >
                 Previous
               </Button>
-              
+
               <div className="flex items-center space-x-1">
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                   // Show current page and nearby pages
@@ -347,7 +374,7 @@ export function UsersTab() {
                   } else {
                     pageNum = currentPage - 2 + i;
                   }
-                  
+
                   return (
                     <Button
                       key={pageNum}
@@ -360,7 +387,7 @@ export function UsersTab() {
                     </Button>
                   );
                 })}
-                
+
                 {totalPages > 5 && currentPage < totalPages - 2 && (
                   <>
                     <span className="px-1">...</span>
@@ -375,7 +402,7 @@ export function UsersTab() {
                   </>
                 )}
               </div>
-              
+
               <Button
                 variant="outline"
                 size="sm"
@@ -395,26 +422,64 @@ export function UsersTab() {
         title={editingUser ? "Edit User" : "Add New User"}
         subtitle={
           editingUser
-            ? `Editing ${editingUser.first_name} ${editingUser.last_name}`
+            ? `Editing ${toTitleCase(editingUser.first_name)} ${toTitleCase(editingUser.last_name)}`
             : "Create a new user account"
         }
       >
         <div className="space-y-6">
           {/* Employee Select */}
-          <div className="space-y-2">
+          <div className="space-y-2 flex flex-col">
             <Label htmlFor="employee">Select Employee *</Label>
-            <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
-              <SelectTrigger id="employee">
-                <SelectValue placeholder="Select an employee" />
-              </SelectTrigger>
-              <SelectContent>
-                {mockEmployees.map((emp) => (
-                  <SelectItem key={emp.id} value={emp.id}>
-                    {emp.name} ({emp.email})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={isEmployeePopoverOpen} onOpenChange={setIsEmployeePopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  id="employee"
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={isEmployeePopoverOpen}
+                  className="w-full justify-between font-normal"
+                >
+                  {selectedEmployee
+                    ? (() => {
+                      const e = apiEmployees.find((emp) => emp.id === selectedEmployee);
+                      return e ? `${e.first_name} ${e.last_name} (${e.work_email})` : "Select an employee";
+                    })()
+                    : "Select an employee"}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search employee..." className="h-9" />
+                  <CommandList>
+                    <CommandEmpty>{isLoadingEmployees ? "Loading employees..." : "No employee found."}</CommandEmpty>
+                    <CommandGroup>
+                      {apiEmployees.map((emp) => (
+                        <CommandItem
+                          key={emp.id}
+                          value={`${emp.first_name} ${emp.last_name} ${emp.work_email}`}
+                          onSelect={() => {
+                            setSelectedEmployee(emp.id);
+                            setIsEmployeePopoverOpen(false);
+                          }}
+                        >
+                          <div className="flex flex-col">
+                            <span>{`${emp.first_name} ${emp.last_name}`}</span>
+                            <span className="text-xs text-muted-foreground group-data-[selected='true']:text-primary-foreground/80">{emp.work_email}</span>
+                          </div>
+                          <Check
+                            className={cn(
+                              "ml-auto h-4 w-4",
+                              selectedEmployee === emp.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Role */}

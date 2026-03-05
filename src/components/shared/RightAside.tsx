@@ -17,6 +17,7 @@ interface RightAsideProps {
   children: ReactNode;
   width?: "sm" | "md" | "lg" | "xl";
   autoCloseAfter?: number; // Auto-close after X seconds
+  subtitleClassName?: string;
 }
 
 export function RightAside({
@@ -27,6 +28,7 @@ export function RightAside({
   children,
   width = "md",
   autoCloseAfter,
+  subtitleClassName,
 }: RightAsideProps) {
   // Auto-close timer
   useEffect(() => {
@@ -81,7 +83,7 @@ export function RightAside({
           <div>
             <h2 className="text-base font-semibold text-foreground">{title}</h2>
             {subtitle && (
-              <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
+              <p className={cn("text-xs text-muted-foreground mt-0.5", subtitleClassName)}>{subtitle}</p>
             )}
           </div>
           <Button
