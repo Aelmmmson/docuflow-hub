@@ -371,10 +371,21 @@ const Dashboard = () => {
   );
 
   useEffect(() => {
-    // Manually trigger initial fetch since DateFilter no longer does it on mount
-    const defaultRange = getPresetRange("today");
-    setActiveRange(defaultRange);
-    fetchDashboardData(defaultRange);
+    let initialRange = getPresetRange("today");
+    try {
+      const stored = sessionStorage.getItem("docuflow_date_filter");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.range?.startDate && parsed.range?.endDate) {
+          initialRange = parsed.range;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to read stored date filter", e);
+    }
+
+    setActiveRange(initialRange);
+    fetchDashboardData(initialRange);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

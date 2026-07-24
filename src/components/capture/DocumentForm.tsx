@@ -29,6 +29,7 @@ import api from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
 import { FileUpload } from "./FileUpload";
 import { toTitleCase } from "@/lib/utils";
+import { AmountInput } from "@/components/ui/amount-input";
 
 interface DocType {
   id: number | string;
@@ -415,11 +416,10 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Requested Amount</Label>
-              <Input
-                type="number"
+              <AmountInput
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="Enter amount"
+                onValueChange={(rawValue) => setAmount(rawValue)}
+                placeholder="0.00"
                 className="h-9 text-xs"
               />
             </div>

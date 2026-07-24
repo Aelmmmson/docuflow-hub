@@ -11,6 +11,7 @@ import { Eye, FileText, CheckCircle, XCircle, Search, Grid, List, ExternalLink, 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AmountInput } from "@/components/ui/amount-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -833,10 +834,10 @@ export default function Approval() {
           <div className="space-y-4 py-4">
             <div className="space-y-1.5">
               <Label className="text-sm">Recommended Amount (Optional)</Label>
-              <Input
-                placeholder="Enter amount"
+              <AmountInput
+                placeholder="0.00"
                 value={recommendedAmount}
-                onChange={(e) => setRecommendedAmount(e.target.value)}
+                onValueChange={(rawValue) => setRecommendedAmount(rawValue)}
               />
             </div>
 
