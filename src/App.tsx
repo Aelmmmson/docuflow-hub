@@ -9,8 +9,10 @@ import Index from "./pages/Index";
 import DocumentCapture from "./pages/DocumentCapture";
 import Approval from "./pages/Approval";
 import Settings from "./pages/Settings";
+import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
+import XAuthCallback from "./pages/XAuthCallback";
 import RequireAuth from "@/components/RequireAuth";
 import FinanceApprovals from "./pages/FinanceApprovals";
 
@@ -25,6 +27,7 @@ const App = () => (
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/xauth/callback" element={<XAuthCallback />} />
 
             <Route
               path="/"
@@ -76,6 +79,17 @@ const App = () => (
                 <RequireAuth>
                   <MainLayout>
                     <Settings />
+                  </MainLayout>
+                </RequireAuth>
+              }
+            />
+
+            <Route
+              path="/profile"
+              element={
+                <RequireAuth>
+                  <MainLayout>
+                    <Profile />
                   </MainLayout>
                 </RequireAuth>
               }

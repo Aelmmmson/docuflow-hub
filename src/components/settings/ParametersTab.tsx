@@ -14,6 +14,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { SearchFilter } from "@/components/shared/SearchFilter";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -42,21 +48,95 @@ interface ExpenseAccount {
   ACCOUNT_DESCRP: string;
 }
 
-// Mock data (unchanged)
-const mockExpenseAccounts: ExpenseAccount[] = [
-  { TACCT: "610000000001", ACCOUNT_DESCRP: "Office Supplies Expense" },
-  { TACCT: "610000000002", ACCOUNT_DESCRP: "Travel & Accommodation" },
-  { TACCT: "610000000003", ACCOUNT_DESCRP: "Marketing & Advertising" },
-  { TACCT: "620000000001", ACCOUNT_DESCRP: "Professional Services" },
-  { TACCT: "620000000002", ACCOUNT_DESCRP: "Training & Development" },
-];
+function parseAccountList(rawPayload: any): ExpenseAccount[] {
+  let items: any[] = [];
+
+  if (Array.isArray(rawPayload)) {
+    if (rawPayload.length > 0 && Array.isArray(rawPayload[0]?.data)) {
+      items = rawPayload.flatMap((wrapper: any) => wrapper.data || []);
+    } else {
+      items = rawPayload;
+    }
+  } else if (rawPayload && typeof rawPayload === "object") {
+    const candidate =
+      rawPayload.expenseAccounts ||
+      rawPayload.data ||
+      rawPayload.accounts ||
+      rawPayload.result ||
+      rawPayload.items;
+
+    if (Array.isArray(candidate)) {
+      if (candidate.length > 0 && Array.isArray(candidate[0]?.data)) {
+        items = candidate.flatMap((wrapper: any) => wrapper.data || []);
+      } else {
+        items = candidate;
+      }
+    } else if (candidate && typeof candidate === "object") {
+      items = Array.isArray(candidate.data) ? candidate.data : [candidate];
+    } else {
+      items = [rawPayload];
+    }
+  }
+
+  if (!Array.isArray(items)) return [];
+
+  return items
+    .map((item: any, idx: number) => {
+      if (typeof item === "string" || typeof item === "number") {
+        const val = String(item).trim();
+        return { TACCT: val, ACCOUNT_DESCRP: `Account ${val}` };
+      }
+
+      if (!item || typeof item !== "object") {
+        return { TACCT: `ACC-${idx + 1}`, ACCOUNT_DESCRP: "Expense Account" };
+      }
+
+      const tacct =
+        item.totalAccount ||
+        item.total_account ||
+        item.TACCT ||
+        item.tacct ||
+        item.account_number ||
+        item.accountNumber ||
+        item.account_no ||
+        item.accountNo ||
+        item.acct_no ||
+        item.acctNo ||
+        item.code ||
+        item.account_code ||
+        item.accountCode ||
+        item.id;
+
+      const desc =
+        item.accountDescription ||
+        item.account_description ||
+        item.accountDescrp ||
+        item.ACCOUNT_DESCRP ||
+        item.account_descrp ||
+        item.account_desc ||
+        item.accountDesc ||
+        item.description ||
+        item.account_name ||
+        item.accountName ||
+        item.name ||
+        item.title;
+
+      if (!tacct) return null;
+
+      return {
+        TACCT: String(tacct).trim(),
+        ACCOUNT_DESCRP: String(desc || `Expense Account (${tacct})`).trim(),
+      };
+    })
+    .filter((a): a is ExpenseAccount => a !== null && a.TACCT !== "");
+}
 
 export function ParametersTab() {
   const { toast } = useToast();
   const currentUser = getCurrentUser();
 
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
-  const [expenseAccounts, setExpenseAccounts] = useState<ExpenseAccount[]>(mockExpenseAccounts);
+  const [expenseAccounts, setExpenseAccounts] = useState<ExpenseAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -107,18 +187,26 @@ export function ParametersTab() {
             ...dt,
             status: dt.status === "1" ? "Active" : "Inactive",
           }));
+          mapped.sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
           setDocumentTypes(mapped);
         }
 
-        setExpenseAccounts(mockExpenseAccounts);
+        // Fetch expense accounts from Core Banking API
+        try {
+          const expenseRes = await api.get("/get-expense-accounts");
+          const mappedAccounts = parseAccountList(expenseRes.data);
+          setExpenseAccounts(mappedAccounts);
+        } catch (acctErr) {
+          console.error("Failed to fetch Core Banking expense accounts:", acctErr);
+          setExpenseAccounts([]);
+        }
       } catch (err: unknown) {
         console.error("Fetch failed:", err);
         toast({
           title: "Error",
-          description: "Could not load parameters or accounts. Using mock data.",
+          description: "Could not load parameters.",
           variant: "destructive",
         });
-        setExpenseAccounts(mockExpenseAccounts);
       } finally {
         setLoading(false);
       }
@@ -242,17 +330,25 @@ export function ParametersTab() {
     {
       key: "actions",
       header: "Action",
-      className: "w-16",
+      className: "w-16 text-right",
       render: (type) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 w-8 p-0"
-          onClick={() => handleEdit(type)}
-          title="Edit parameter"
-        >
-          <Edit2 className="h-4 w-4" />
-        </Button>
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 text-muted-foreground hover:bg-primary hover:text-white transition-colors"
+                onClick={() => handleEdit(type)}
+              >
+                <Edit2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Edit Parameter</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       ),
     },
   ];
@@ -428,7 +524,18 @@ export function ParametersTab() {
             <Switch
               id="transactional"
               checked={isTransactional}
-              onCheckedChange={setIsTransactional}
+              onCheckedChange={async (checked) => {
+                setIsTransactional(checked);
+                if (checked) {
+                  try {
+                    const expenseRes = await api.get("/get-expense-accounts");
+                    const mappedAccounts = parseAccountList(expenseRes.data);
+                    setExpenseAccounts(mappedAccounts);
+                  } catch (acctErr) {
+                    console.warn("Expense accounts fetch on switch failed:", acctErr);
+                  }
+                }
+              }}
             />
           </div>
 

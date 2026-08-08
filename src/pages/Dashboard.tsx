@@ -14,6 +14,7 @@ import { RecentDocuments } from "@/components/dashboard/RecentDocuments";
 import { ExpensesChart } from "@/components/dashboard/ExpensesChart";
 import { CategoriesChart } from "@/components/dashboard/CategoriesChart";
 import { DashboardSkeleton } from "@/components/skeletons/DashboardSkeleton";
+import { UserProfileDropdown } from "@/components/layout/UserProfileDropdown";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ReactNode, useCallback, useEffect, useState } from "react";
 import { getCurrentUser } from "@/lib/auth";
@@ -419,12 +420,14 @@ const Dashboard = () => {
           <h1 className="text-lg font-bold text-foreground">Welcome, <span className="capitalize">{userName}</span></h1>
           <p className="text-xs text-muted-foreground">Manage your documents efficiently</p>
         </div>
+
         <div className="flex items-center gap-3 animate-fade-in" style={{ animationDelay: "100ms" }}>
           <div className="text-right">
             <p className="text-xs font-medium text-foreground">{formatDate(currentTime)}</p>
             <p className="text-xs text-muted-foreground font-mono">{formatTime(currentTime)}</p>
           </div>
           <ThemeToggle />
+          <UserProfileDropdown />
         </div>
       </div>
 

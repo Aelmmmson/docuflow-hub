@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "DMS API",
-    "description": "Document Management System API",
+    "name": "xDMS - DocuFlow Hub API",
+    "description": "Comprehensive Postman collection for xDMS (DocuFlow Hub) enterprise document management system API endpoints, including Auth, User Management, Approver Setup, Core Banking Integration, Document Capture, and Approval Activities.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -9,57 +9,66 @@
       "name": "Auth",
       "item": [
         {
-          "name": "Login",
+          "name": "User Login",
           "request": {
             "method": "POST",
             "header": [
               { "key": "Accept", "value": "application/json" },
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "x-api-key", "value": "{{api_key}}" }
+              { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\"\n}"
+              "raw": "{\n  \"email\": \"admin@company.com\",\n  \"password\": \"Password123!\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/v1/api/dms/user/login",
               "host": ["{{base_url}}"],
               "path": ["v1", "api", "dms", "user", "login"]
             }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const res = pm.response.json();",
-                  "if (res.token) { pm.environment.set('access_token', res.token); }"
-                ]
-              }
-            }
-          ]
+          }
         },
         {
-          "name": "Refresh Token",
+          "name": "XAuth SSO Login",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-api-key", "value": "{{api_key}}" },
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
             ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"sso_token_here\"\n}"
+            },
             "url": {
-              "raw": "{{base_url}}/v1/api/dms/refresh-token",
+              "raw": "{{base_url}}/v1/api/dms/user/xauth-login",
               "host": ["{{base_url}}"],
-              "path": ["v1", "api", "dms", "refresh-token"]
+              "path": ["v1", "api", "dms", "user", "xauth-login"]
             }
           }
         },
         {
-          "name": "Logout",
+          "name": "Forgot Password",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-api-key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@company.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/user/forgot-password",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "user", "forgot-password"]
+            }
+          }
+        },
+        {
+          "name": "User Logout",
+          "request": {
+            "method": "GET",
+            "header": [
               { "key": "Authorization", "value": "Bearer {{access_token}}" }
             ],
             "url": {
@@ -68,39 +77,31 @@
               "path": ["v1", "api", "dms", "user", "logout"]
             }
           }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/user/refresh-token",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "user", "refresh-token"]
+            }
+          }
         }
       ]
     },
     {
-      "name": "Users",
+      "name": "User Management",
       "item": [
         {
-          "name": "Register User",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Accept", "value": "application/json" },
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "x-api-key", "value": "{{api_key}}" },
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"first_name\": \"henry\",\n  \"last_name\": \"amoh\",\n  \"email\": \"henry4@gmail.com\",\n  \"status\": \"1\",\n  \"phone\": \"0243069668\",\n  \"employee_id\": \"0011\",\n  \"role\": \"admin\",\n  \"posted_by\": 1\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/api/dms/user/register",
-              "host": ["{{base_url}}"],
-              "path": ["v1", "api", "dms", "user", "register"]
-            }
-          }
-        },
-        {
-          "name": "Get Users",
+          "name": "Get All Users",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "x-api-key", "value": "{{api_key}}" },
               { "key": "Authorization", "value": "Bearer {{access_token}}" }
             ],
             "url": {
@@ -115,35 +116,406 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "x-api-key", "value": "{{api_key}}" },
               { "key": "Authorization", "value": "Bearer {{access_token}}" }
             ],
             "url": {
-              "raw": "{{base_url}}/v1/api/dms/get-user/{{user_id}}",
+              "raw": "{{base_url}}/v1/api/dms/get-user/:userId",
               "host": ["{{base_url}}"],
-              "path": ["v1", "api", "dms", "get-user", "{{user_id}}"]
+              "path": ["v1", "api", "dms", "get-user", ":userId"],
+              "variable": [{ "key": "userId", "value": "1" }]
             }
           }
         },
         {
-          "name": "Get User Roles",
+          "name": "Register New User",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"John\",\n  \"last_name\": \"Doe\",\n  \"email\": \"john.doe@company.com\",\n  \"status\": 1,\n  \"phone\": \"0240000000\",\n  \"employee_id\": \"1001\",\n  \"role\": \"approver\",\n  \"posted_by\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/user/register",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "user", "register"]
+            }
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"approver\",\n  \"status\": 1,\n  \"phone\": \"0240000000\",\n  \"forceRemoveApprover\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/update-user/:userId",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "update-user", ":userId"],
+              "variable": [{ "key": "userId", "value": "2" }]
+            }
+          }
+        },
+        {
+          "name": "Check User Engagement (Role Conflict Pre-Validation)",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "x-api-key", "value": "{{api_key}}" },
               { "key": "Authorization", "value": "Bearer {{access_token}}" }
             ],
             "url": {
-              "raw": "{{base_url}}/v1/api/dms/get-users-roles",
+              "raw": "{{base_url}}/v1/api/dms/check-user-engagement/:userId",
               "host": ["{{base_url}}"],
-              "path": ["v1", "api", "dms", "get-users-roles"]
+              "path": ["v1", "api", "dms", "check-user-engagement", ":userId"],
+              "variable": [{ "key": "userId", "value": "2" }]
+            }
+          }
+        },
+        {
+          "name": "Remove User From Approval Setups",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/remove-user-from-approvals/:userId",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "remove-user-from-approvals", ":userId"],
+              "variable": [{ "key": "userId", "value": "2" }]
+            }
+          }
+        },
+        {
+          "name": "Update Self Profile & Signature",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"John\",\n  \"last_name\": \"Doe\",\n  \"phone\": \"0240000000\",\n  \"signature\": \"data:image/png;base64,...\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/user/update-self-profile",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "user", "update-self-profile"]
+            }
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current_password\": \"OldPassword123!\",\n  \"new_password\": \"NewPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/user/change-password",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "user", "change-password"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Document Setup & Parameters",
+      "item": [
+        {
+          "name": "Get All Document Types",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/get-doc-types",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "get-doc-types"]
+            }
+          }
+        },
+        {
+          "name": "Get Available Document Types",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/get-available-doc-types",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "get-available-doc-types"]
+            }
+          }
+        },
+        {
+          "name": "Add Document Type",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Payment Requisition\",\n  \"trans_type\": \"FINANCIAL\",\n  \"status\": 1,\n  \"parameters\": [\"amount\", \"beneficiary_account\", \"purpose\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/add-doc-type",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "add-doc-type"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Approval Matrix Setup",
+      "item": [
+        {
+          "name": "Get Approver Setups",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/get-approver-setups",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "get-approver-setups"]
+            }
+          }
+        },
+        {
+          "name": "Create Approver Setup",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"doctype_id\": 1,\n  \"description\": \"Payment Requisition Workflow\",\n  \"details\": [\n    {\n      \"stage_num\": 1,\n      \"quorum\": 1,\n      \"is_mandatory\": true,\n      \"approvers\": [2, 3]\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/create-doc-approvers-setup",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "create-doc-approvers-setup"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Core Banking & Accounts",
+      "item": [
+        {
+          "name": "Get Core Banking Expense Accounts",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/get-expense-accounts",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "get-expense-accounts"]
+            }
+          }
+        },
+        {
+          "name": "Core Banking Real-time Account Lookup",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/get-account-lookup/:accountNumber",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "get-account-lookup", ":accountNumber"],
+              "variable": [{ "key": "accountNumber", "value": "132220000060" }]
+            }
+          }
+        },
+        {
+          "name": "Get All Beneficiary Accounts",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/get-all-beneficiary-accounts",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "get-all-beneficiary-accounts"]
+            }
+          }
+        },
+        {
+          "name": "Add Beneficiary Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"beneficiary_name\": \"Legal Fees - LD\",\n  \"account_number\": \"132220000060\",\n  \"description\": \"Core Banking Expense Account\",\n  \"status\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/add-beneficiary-account",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "add-beneficiary-account"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Document Operations & Approvals",
+      "item": [
+        {
+          "name": "Generate Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"doctype_id\": 1,\n  \"details\": \"Legal retainer fee payment\",\n  \"requested_amount\": \"1500.00\",\n  \"customer_no\": \"132220000060\",\n  \"customer_desc\": \"Legal Fees - LD\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/generate-doc",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "generate-doc"]
+            }
+          }
+        },
+        {
+          "name": "Submit Document for Approval",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/submit-doc/:docId",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "submit-doc", ":docId"],
+              "variable": [{ "key": "docId", "value": "1" }]
+            }
+          }
+        },
+        {
+          "name": "Get Document Details By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/get-doc/:docId",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "get-doc", ":docId"],
+              "variable": [{ "key": "docId", "value": "1" }]
+            }
+          }
+        },
+        {
+          "name": "Get Pending Docs For Approval",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/get-pending-docs",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "get-pending-docs"]
+            }
+          }
+        },
+        {
+          "name": "Approve Document (Stage Advancement)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activity_id\": 1,\n  \"comment\": \"Approved after legal review\",\n  \"signature\": \"data:image/png;base64,...\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/approve-doc",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "approve-doc"]
+            }
+          }
+        },
+        {
+          "name": "Decline Document",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activity_id\": 1,\n  \"comment\": \"Declined due to missing invoice documentation\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/reject-doc",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "reject-doc"]
+            }
+          }
+        },
+        {
+          "name": "Get Approval Audit Trail Comments",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/api/dms/get-approval-comments/:docId",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api", "dms", "get-approval-comments", ":docId"],
+              "variable": [{ "key": "docId", "value": "1" }]
             }
           }
         }
       ]
     }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:5000", "type": "string" },
+    { "key": "access_token", "value": "", "type": "string" }
   ]
 }
-
-
-

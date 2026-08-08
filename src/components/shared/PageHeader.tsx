@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { UserProfileDropdown } from "@/components/layout/UserProfileDropdown";
 
 interface PageHeaderProps {
   title: string;
@@ -51,6 +52,7 @@ export function PageHeader({ title, description }: PageHeaderProps) {
           <p className="text-xs text-muted-foreground font-mono">{formatTime(currentTime)}</p>
         </div>
         <ThemeToggle />
+        <UserProfileDropdown />
       </div>
     </div>
   );

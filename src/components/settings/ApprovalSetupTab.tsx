@@ -373,7 +373,8 @@ export function ApprovalSetupTab() {
   const fetchApprovalSetups = useCallback(async () => {
     try {
       const res = await api.get<{ setups: ApprovalSetup[] }>("/get-approver-setups");
-      setSetups(res.data.setups);
+      const sorted = [...(res.data.setups || [])].sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
+      setSetups(sorted);
     } catch (err: unknown) {
       console.error("Failed to fetch approval setups:", err);
       toast({
@@ -419,14 +420,14 @@ export function ApprovalSetupTab() {
       header: "Actions",
       className: "w-24",
       render: (setup) => (
-        <TooltipProvider>
+        <TooltipProvider delayDuration={200}>
           <div className="flex items-center gap-1">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8"
+                  className="h-8 w-8 text-muted-foreground hover:bg-primary hover:text-white transition-colors"
                   onClick={() => handleEdit(setup)}
                 >
                   <Edit2 className="h-4 w-4" />
@@ -439,7 +440,7 @@ export function ApprovalSetupTab() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8"
+                  className="h-8 w-8 text-muted-foreground hover:bg-primary hover:text-white transition-colors"
                   onClick={() => handleView(setup)}
                 >
                   <Eye className="h-4 w-4" />

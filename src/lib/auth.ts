@@ -14,24 +14,29 @@ export interface AuthUser {
   email: string;
   role_id: number;
   role_name: string;
+  signature?: string;
+  phone?: string;
+  branch?: string;
 }
 
 // Check if user is authenticated (based on real token presence)
 export function isAuthenticated(): boolean {
   const token = localStorage.getItem(TOKEN_KEY);
-  if (!token) return false;
+  const user = localStorage.getItem(USER_KEY);
+  if (!token || !user) return false;
 
-  // Basic expiration check
   try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    const exp = payload.exp * 1000; // convert to ms
-    if (Date.now() >= exp) {
-      return false; // Don't logout automatically here, let refresh handle it
+    const parts = token.split(".");
+    if (parts.length === 3) {
+      const payload = JSON.parse(atob(parts[1]));
+      const exp = payload.exp * 1000; // convert to ms
+      if (Date.now() >= exp) {
+        return false; // Token expired
+      }
     }
     return true;
   } catch (e) {
-    logout();
-    return false;
+    return !!localStorage.getItem(USER_KEY);
   }
 }
 
@@ -43,16 +48,26 @@ export async function refreshAccessToken(): Promise<boolean> {
       localStorage.setItem(TOKEN_KEY, res.data.accessToken);
       return true;
     }
+    logout();
     return false;
   } catch (err) {
-    console.error("[AUTH] Refresh failed:", err);
+    // Clear stale tokens if refresh fails
+    logout();
     return false;
   }
 }
 
 // Save auth data after successful login
-export function login(accessToken: string, user: AuthUser) {
+export function login(accessToken: string, user: AuthUser, refreshToken?: string) {
   localStorage.setItem(TOKEN_KEY, accessToken);
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  if (refreshToken) {
+    localStorage.setItem("refresh_token", refreshToken);
+  }
+}
+
+// Save updated user data
+export function setCurrentUser(user: AuthUser) {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
@@ -60,6 +75,7 @@ export function login(accessToken: string, user: AuthUser) {
 export function logout() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem("refresh_token");
 }
 
 // Get current user data

@@ -11,11 +11,15 @@ const api = axios.create({
   },
 });
 
-// Request interceptor – add Bearer token
+// Request interceptor – add Bearer token & refresh token
 api.interceptors.request.use((config) => {
   const token = getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  const refreshToken = localStorage.getItem("refresh_token");
+  if (refreshToken) {
+    config.headers["x-refresh-token"] = refreshToken;
   }
   return config;
 });

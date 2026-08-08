@@ -2,10 +2,14 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { isAuthenticated, refreshAccessToken } from "@/lib/auth";
+import XAuthCallback from "@/pages/XAuthCallback";
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   const location = useLocation();
   const [authStatus, setAuthStatus] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
+
+  const searchParams = new URLSearchParams(location.search);
+  const hasTokenParam = searchParams.has("token");
 
   useEffect(() => {
     async function checkAndRefreshAuth() {
@@ -18,6 +22,10 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     }
     checkAndRefreshAuth();
   }, []);
+
+  if (hasTokenParam) {
+    return <XAuthCallback />;
+  }
 
   if (authStatus === "loading") {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>; // Simple loading state

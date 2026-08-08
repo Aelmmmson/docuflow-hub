@@ -70,3 +70,13 @@ export function formatAmount(amount: string | number | undefined | null): string
     maximumFractionDigits: 2,
   });
 }
+
+/**
+ * Formats a document ID/reference number by stripping 'REF-' for filesearch endpoints.
+ * e.g., "REF-1785747836" -> "http://10.203.14.169/dms/filesearch-1785747836"
+ */
+export function getFileSearchUrl(idOrDocId: string | number | undefined | null): string {
+  if (!idOrDocId) return "";
+  const cleanId = String(idOrDocId).replace(/^REF-/i, "");
+  return `http://10.203.14.169/dms/filesearch-${cleanId}`;
+}

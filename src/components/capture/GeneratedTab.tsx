@@ -128,6 +128,7 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
   const [editFile, setEditFile] = useState<File | null>(null);
   const [updating, setUpdating] = useState(false);
   const [selectedDocType, setSelectedDocType] = useState<DocType | null>(null);
+  const [beneficiaries, setBeneficiaries] = useState<any[]>([]);
 
   // View aside state
   const [isViewOpen, setIsViewOpen] = useState(false);
@@ -140,6 +141,19 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
   // Declined reason aside state
   const [isDeclinedOpen, setIsDeclinedOpen] = useState(false);
   const [declinedDoc, setDeclinedDoc] = useState<GeneratedDocument | null>(null);
+
+  useEffect(() => {
+    const fetchBeneficiaries = async () => {
+      try {
+        const res = await api.get("/get-all-beneficiary-accounts");
+        const list = res.data?.accounts || [];
+        setBeneficiaries(list);
+      } catch (err) {
+        console.warn("Could not load beneficiaries:", err);
+      }
+    };
+    fetchBeneficiaries();
+  }, []);
 
   // Fetch documents from backend
   const fetchDocuments = useCallback(async () => {
@@ -173,6 +187,9 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
           stage_updated_at: doc.stage_updated_at || undefined,
           // We'll need to fetch trans_type separately or get it from documentTypes
         }));
+
+        // Sort newest first
+        formattedDocs.sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
 
         setDocuments(formattedDocs);
       }
@@ -743,15 +760,27 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
           {isTransactionalDoc && (
             <div className="space-y-2">
               <Label htmlFor="editCustomerNumber" className="text-xs font-medium">
-                Customer Number
+                Beneficiary Account Number
               </Label>
-              <Input
-                id="editCustomerNumber"
+              <Select
                 value={editCustomerNumber}
-                onChange={(e) => setEditCustomerNumber(e.target.value)}
-                placeholder="Enter customer number"
-                className="h-9"
-              />
+                onValueChange={(val) => setEditCustomerNumber(val)}
+              >
+                <SelectTrigger id="editCustomerNumber" className="h-9 text-xs">
+                  <SelectValue placeholder="Select beneficiary account..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {beneficiaries.map((b: any) => {
+                    const acct = String(b.account_number || b.accountNumber || "").trim();
+                    const name = String(b.beneficiary_name || b.name || "Beneficiary").trim();
+                    return (
+                      <SelectItem key={b.id || acct} value={acct}>
+                        {name} ({acct})
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
             </div>
           )}
 
@@ -819,6 +848,14 @@ export function GeneratedTab({ externalDocuments }: GeneratedTabProps) {
                 <span className="text-xs text-muted-foreground">Upload Date</span>
                 <span className="text-xs font-medium">{viewingDoc.uploadDate}</span>
               </div>
+              {((viewingDoc as any).created_by || (viewingDoc as any).creator_name || (viewingDoc as any).posted_by) && (
+                <div className="flex justify-between">
+                  <span className="text-xs text-muted-foreground font-semibold">Created By / Originator</span>
+                  <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                    {(viewingDoc as any).created_by || (viewingDoc as any).creator_name || `Staff ID: ${(viewingDoc as any).posted_by}`}
+                  </span>
+                </div>
+              )}
               {viewingDoc.amount && (
                 <div className="flex justify-between">
                   <span className="text-xs text-muted-foreground">Requested Amount</span>

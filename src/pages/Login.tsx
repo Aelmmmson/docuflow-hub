@@ -1,10 +1,21 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { User, Key, Eye, EyeOff, Shield } from "lucide-react";
+import { User, Key, Eye, EyeOff, Shield, Mail, ArrowRight, Copy, Check } from "lucide-react";
 import { motion } from "framer-motion";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import axios from "axios";
-import { login } from "@/lib/auth"; // ← updated import – uses real auth
+import { login, isAuthenticated } from "@/lib/auth";
+import { getXAuthInitiateUrl } from "@/lib/xauth";
 
 // API configuration – relative path (uses Vite proxy)
 const api = axios.create({
@@ -215,17 +226,101 @@ function ExpenseBackground() {
 
 export default function Login() {
 
+  const { toast } = useToast();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Forgot password modal state
+  const [isForgotOpen, setIsForgotOpen] = useState(false);
+  const [forgotInput, setForgotInput] = useState("");
+  const [isSubmittingForgot, setIsSubmittingForgot] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState<string | null>(null);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [copiedResetMsg, setCopiedResetMsg] = useState(false);
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotInput.trim()) return;
+
+    setIsSubmittingForgot(true);
+    setForgotMessage(null);
+    setForgotError(null);
+
+    try {
+      const res = await api.post("/user/forgot-password", {
+        emailOrStaffId: forgotInput.trim(),
+      });
+
+      if (res.data.code === "200") {
+        setForgotMessage(res.data.result || "Password reset request successful.");
+        setForgotInput("");
+      } else {
+        setForgotError(res.data.result || "Failed to reset password.");
+      }
+    } catch (err: any) {
+      setForgotError(err.response?.data?.result || "Failed to reset password.");
+    } finally {
+      setIsSubmittingForgot(false);
+    }
+  };
+
   const navigate = useNavigate();
   const location = useLocation();
 
-  // const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname || "/";
   const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname || "/";
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === "XAUTH_SUCCESS") {
+        const { accessToken, user, refreshToken } = event.data;
+        if (accessToken && user) {
+          login(accessToken, user, refreshToken);
+          navigate(from, { replace: true });
+        }
+      } else if (event.data && event.data.type === "XAUTH_ERROR") {
+        if (event.data.message) {
+          setError(event.data.message);
+        }
+      }
+    };
+
+    const checkAuth = () => {
+      if (isAuthenticated()) {
+        navigate(from, { replace: true });
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    window.addEventListener("focus", checkAuth);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      window.removeEventListener("focus", checkAuth);
+    };
+  }, [from, navigate]);
+
+  const handleXAuthLogin = () => {
+    setError(null);
+    const initiateUrl = getXAuthInitiateUrl();
+    const width = 500;
+    const height = 650;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+
+    const popup = window.open(
+      initiateUrl,
+      "XAuthLoginPopup",
+      `width=${width},height=${height},left=${left},top=${top},location=no,toolbar=no,menubar=no,status=no,resizable=yes,scrollbars=yes`
+    );
+
+    if (!popup || popup.closed || typeof popup.closed === "undefined") {
+      setError(
+        "Popup blocker is preventing the X100 login window from opening. Please allow popups for this site."
+      );
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -397,7 +492,7 @@ export default function Login() {
             transition={{ duration: 0.6 }}
             style={{ animationDelay: "200ms" }}
           >
-            <div className="relative w-full h-80 lg:h-72 shadow-lg hover:shadow-2xl transition-shadow duration-300 rounded-2xl">
+            <div className="relative w-full min-h-[420px] lg:min-h-[400px] shadow-lg hover:shadow-2xl transition-shadow duration-300 rounded-2xl">
               {/* Decorative folder elements */}
               <div
                 className="work-5 bg-gradient-to-r from-blue-300 to-blue-300 w-full h-full rounded-2xl rounded-tr-none relative 
@@ -470,27 +565,148 @@ export default function Login() {
                       </button>
                     </div>
 
+                    <div className="flex justify-between items-center text-xs mt-1">
+                      <span />
+                      <button
+                        type="button"
+                        onClick={() => setIsForgotOpen(true)}
+                        className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
+
                     <div className="flex justify-end mt-2">
                       <button
                         type="submit"
                         disabled={loading}
-                        className={`px-6 py-2 rounded-md bg-blue-600 text-white font-medium shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all ${loading ? "opacity-60 cursor-not-allowed" : "hover:shadow-lg active:translate-y-px"
+                        className={`w-full py-2.5 rounded-md bg-blue-600 text-white font-medium shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all ${loading ? "opacity-60 cursor-not-allowed" : "hover:shadow-lg active:translate-y-px"
                           }`}
                       >
                         {loading ? "Signing in..." : "Sign In"}
                       </button>
                     </div>
                   </form>
+
+                  {/* ── Or login via X100 divider & button ────────────────── */}
+                  <div className="relative my-3 flex items-center justify-center">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-border/80" />
+                    </div>
+                    <div className="relative px-3 bg-white dark:bg-card text-[11px] font-bold tracking-widest text-muted-foreground/80 uppercase">
+                      Or continue with
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleXAuthLogin}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-black hover:bg-zinc-900 active:bg-black text-white font-medium text-sm transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98] border border-zinc-800"
+                  >
+                    <svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 shrink-0">
+                      <path d="M5.46 2H4.05c-.93 0-1.4 1.13-.74 1.79l5.73 5.73a4.189 4.189 0 0 0 5.93 0l5.73-5.73c.65-.66.18-1.79-.75-1.79h-1.41c-.83 0-1.63.33-2.22.92L12.74 6.5c-.41.41-1.07.41-1.48 0L7.68 2.92C7.09 2.33 6.29 2 5.46 2Z" fill="#FF8A65" />
+                      <path opacity=".4" d="M5.46 21.969H4.05c-.93 0-1.4-1.13-.74-1.79l5.73-5.73a4.189 4.189 0 0 1 5.93 0l5.73 5.73c.66.66.19 1.79-.74 1.79h-1.41c-.83 0-1.63-.33-2.22-.92l-3.58-3.58c-.41-.41-1.07-.41-1.48 0l-3.58 3.58c-.6.59-1.4.92-2.23.92Z" fill="#FF8A65" />
+                    </svg>
+                    <span className="font-semibold text-white text-sm tracking-wide">
+                      Sign in with x100 xAuth
+                    </span>
+                  </button>
                 </div>
               </div>
 
-              <p className="text-center text-sm text-muted-foreground/80 mt-6 italic">
-                Powered by <span className="font-semibold">USG®</span>
-              </p>
             </div>
+            <p className="text-center text-sm text-muted-foreground/80 mt-6 italic">
+              Powered by <span className="font-semibold">USG®</span>
+            </p>
           </motion.div>
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      <Dialog open={isForgotOpen} onOpenChange={setIsForgotOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Mail className="h-5 w-5 text-blue-600" />
+              Reset Account Password
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Enter your registered Email Address or Staff ID to receive password reset instructions.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleForgotPassword} className="space-y-4 pt-2">
+            {forgotMessage && (
+              <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-medium border border-emerald-200 flex items-center justify-between gap-2">
+                <span className="flex-1 break-words">{forgotMessage}</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-xs flex items-center gap-1 shrink-0 bg-white dark:bg-slate-900 border-emerald-300 hover:bg-emerald-100 hover:text-black"
+                  onClick={() => {
+                    navigator.clipboard.writeText(forgotMessage);
+                    setCopiedResetMsg(true);
+                    toast({
+                      title: "Copied to Clipboard",
+                      description: "Password reset details copied.",
+                    });
+                    setTimeout(() => setCopiedResetMsg(false), 2500);
+                  }}
+                >
+                  {copiedResetMsg ? (
+                    <>
+                      <Check className="h-3.5 w-3.5 text-emerald-600" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3.5 w-3.5 text-emerald-600" />
+                      Copy
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+
+            {forgotError && (
+              <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs font-medium border border-rose-200">
+                {forgotError}
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">Email or Staff ID</label>
+              <Input
+                value={forgotInput}
+                onChange={(e) => setForgotInput(e.target.value)}
+                placeholder="e.g. john.doe@usg.com or STF-102"
+                required
+                className="text-xs"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsForgotOpen(false)}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSubmittingForgot}
+                className="gap-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {isSubmittingForgot ? "Submitting..." : "Reset Password"}
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

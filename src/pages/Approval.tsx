@@ -7,7 +7,8 @@
 
 import { ApprovalSkeleton } from "@/components/skeletons/ApprovalSkeleton";
 import { useState, useEffect, useCallback } from "react";
-import { Eye, FileText, CheckCircle, XCircle, Search, Grid, List, ExternalLink, Download, X } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { Eye, FileText, CheckCircle, XCircle, Search, Grid, List, ExternalLink, Download, X, Clock, History } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { RightAside } from "@/components/shared/RightAside";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EnquiryTab } from "@/components/capture/EnquiryTab";
+import { computeAwaitingApprovers } from "@/lib/approvalUtils";
 import { useToast } from "@/hooks/use-toast";
 import { getCurrentUser } from "@/lib/auth";
 import {
@@ -51,6 +55,10 @@ import {
 import api from "@/lib/api";
 import { DocumentCard } from "../components/capture/DocumentCard";
 import { GeneratedDocument } from "../components/capture/GeneratedTab";
+import { createApprovalStampedPdf, updateDocumentFile } from "@/lib/documentStamper";
+import { SigningAnimationModal } from "@/components/shared/SigningAnimationModal";
+
+import { toTitleCase, formatAmount } from "@/lib/utils";
 
 interface ApprovalDocument {
   id: number;
@@ -60,12 +68,16 @@ interface ApprovalDocument {
   doctype_name: string;
   approval_stage: number;
   status: "SUBMITTED" | "PAID" | "APPROVED" | "DRAFT" | "REJECTED";
-  requested_amount: string;
-  customerNumber: string;
-  customerName: string;
+  requested_amount?: string;
+  customerNumber?: string;
+  customerName?: string;
+  posted_by?: number | string;
+  doctype_id?: number | string;
+  trans_type?: string;
   customer_no?: string;
   customer_desc?: string;
-  approvalComments?: { comment: string; approver: string; activity_id: number }[] | string;
+  approvalComments?: { comment: string; approver: string; activity_id: number; signature?: string; role_name?: string; created_at?: string }[] | string;
+  awaitingApprovers?: { name: string; role: string; stage: number; isMandatory: boolean }[];
   documents?: [];
   amount?: string;
   // For DocumentCard compatibility
@@ -103,7 +115,7 @@ export default function Approval() {
   const currentUser = getCurrentUser();
   const [isLoading, setIsLoading] = useState(true);
   const [documents, setDocuments] = useState<ApprovalDocument[]>([]);
-  const [documentTypes, setDocumentTypes] = useState<{id: number, description: string}[]>([]);
+  const [documentTypes, setDocumentTypes] = useState<{id: number | string, description: string, trans_type?: string}[]>([]);
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -118,6 +130,7 @@ export default function Approval() {
   const [isApproveOpen, setIsApproveOpen] = useState(false);
   const [approveRemarks, setApproveRemarks] = useState("");
   const [recommendedAmount, setRecommendedAmount] = useState("");
+  const [isSigningAnimating, setIsSigningAnimating] = useState(false);
 
   // Decline dialog state
   const [isDeclineOpen, setIsDeclineOpen] = useState(false);
@@ -141,12 +154,26 @@ export default function Approval() {
     return matchesSearch && matchesStatus && matchesType;
   });
 
-  const handleView = async(doc: ApprovalDocument) => {
+  const [searchParams] = useSearchParams();
+  const deepDocId = searchParams.get("docId");
+
+  const handleView = async (doc: ApprovalDocument) => {
     try {
       const res = await api.get(`/get-approval-comments/${doc.id}`);
-      console.log("Approval comments response:", res.data);
+      const comments = Array.isArray(res.data.comments) ? res.data.comments : [];
       
-      setViewingDoc({...doc, approvalComments: res.data.comments});
+      let awaitingApprovers: { name: string; role: string; stage: number; isMandatory: boolean }[] = [];
+      try {
+        const setupRes = await api.get<{ setups: any[] }>("/get-approver-setups");
+        const docSetup = setupRes.data?.setups?.find((s: any) => String(s.doctype_id) === String((doc as any).doctype_id));
+        if (docSetup && docSetup.details) {
+          awaitingApprovers = computeAwaitingApprovers(docSetup.details, Number(doc.approval_stage || 1), comments);
+        }
+      } catch (setupErr) {
+        console.warn("Could not fetch awaiting approvers:", setupErr);
+      }
+
+      setViewingDoc({ ...doc, approvalComments: comments, awaitingApprovers });
       setIsViewOpen(true);
     } catch (error) {
       console.error("Error fetching approval comments:", error);
@@ -154,6 +181,49 @@ export default function Approval() {
       setIsViewOpen(true);
     }
   };
+
+  useEffect(() => {
+    if (deepDocId && !isViewOpen) {
+      const targetDoc = documents.find(
+        (d) => d.doc_id === deepDocId || String(d.id) === deepDocId
+      );
+      if (targetDoc) {
+        handleView(targetDoc);
+      } else {
+        // Fetch directly from backend API so right-aside opens immediately
+        api.get(`/get-approval-comments/${deepDocId}`)
+          .then((res) => {
+            const comments = Array.isArray(res.data?.comments) ? res.data.comments : [];
+            const mockDoc: ApprovalDocument = {
+              id: Number(deepDocId) || 0,
+              doc_id: deepDocId,
+              doctype_name: "Document Review",
+              details: `Details for document ${deepDocId}`,
+              status: "SUBMITTED",
+              approval_stage: 1,
+              created_at: new Date().toISOString(),
+              posted_by: "",
+              approvalComments: comments,
+            };
+            setViewingDoc(mockDoc);
+            setIsViewOpen(true);
+          })
+          .catch(() => {
+            setViewingDoc({
+              id: 0,
+              doc_id: deepDocId,
+              doctype_name: "Document Review",
+              details: `Review document ${deepDocId}`,
+              status: "SUBMITTED",
+              approval_stage: 1,
+              created_at: new Date().toISOString(),
+              posted_by: "",
+            });
+            setIsViewOpen(true);
+          });
+      }
+    }
+  }, [deepDocId, documents]);
 
   const handleOpenApprove = () => {
     setRecommendedAmount("");
@@ -164,35 +234,63 @@ export default function Approval() {
   const handleApprove = async () => {
     if (!viewingDoc) return;
 
-    const payload = {
-      data: {
-        docId: viewingDoc.id,
-        userId: currentUser?.user_id,
-        recommended_amount: recommendedAmount || null,
-        requested_amount: viewingDoc.amount,
-        remarks: approveRemarks || "",
-        db_account: "",
-        cr_account: viewingDoc.customerNumber,
-        trans_type: viewingDoc.doctype_name,
-        customerDesc: viewingDoc.customerName
-      }
-    };
+    setIsSigningAnimating(true);
+
+    const approverName = currentUser ? `${currentUser.first_name} ${currentUser.last_name}` : "Authorized Approver";
+    const roleName = currentUser?.role_name || "Approver";
+    const timestamp = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
     try {
+      // 1. Stamp approval authorization block onto last page bottom of the existing PDF (WITHOUT remarks)
+      const stampedPdfBase64 = await createApprovalStampedPdf({
+        docId: viewingDoc.doc_id,
+        numericDocId: viewingDoc.id,
+        approverName,
+        roleName,
+        timestamp,
+        signatureBase64: (currentUser as any)?.signature,
+        approverUserId: currentUser?.user_id,
+        approvalStage: viewingDoc.approval_stage,
+      });
+
+      // 2. Upload stamped PDF to /dms/api/update_document_api.php via FormData
+      if (stampedPdfBase64) {
+        await updateDocumentFile(viewingDoc.doc_id, stampedPdfBase64, `Approved by ${approverName}`);
+      }
+
+      // 3. Update database approval stage via backend PUT /approve-doc
+      const payload = {
+        data: {
+          docId: viewingDoc.id,
+          userId: currentUser?.user_id,
+          recommended_amount: recommendedAmount || null,
+          requested_amount: viewingDoc.amount,
+          remarks: approveRemarks || "",
+          db_account: "",
+          cr_account: viewingDoc.customerNumber,
+          trans_type: viewingDoc.doctype_name,
+          customerDesc: viewingDoc.customerName
+        }
+      };
+
       const response = await api.put("/approve-doc", payload);
       
-      if (response.data.code === "200") {
-        setDocuments((prev) => prev.filter((doc) => doc.id !== viewingDoc.id));
-        toast({
-          title: "Document Approved",
-          description: `${viewingDoc.doc_id} has been approved successfully.`,
-        });
-        setIsApproveOpen(false);
-        setIsViewOpen(false);
-        setViewingDoc(null);
-      }
+      setTimeout(() => {
+        setIsSigningAnimating(false);
+        if (response.data.code === "200") {
+          setDocuments((prev) => prev.filter((doc) => doc.id !== viewingDoc.id));
+          toast({
+            title: "Document Approved",
+            description: `${viewingDoc.doc_id} has been signed and approved successfully.`,
+          });
+          setIsApproveOpen(false);
+          setIsViewOpen(false);
+          setViewingDoc(null);
+        }
+      }, 10500);
     } catch (error) {
       console.error("Approval failed:", error);
+      setIsSigningAnimating(false);
       toast({
         title: "Error",
         description: "Failed to approve document",
@@ -207,8 +305,32 @@ export default function Approval() {
   };
 
   const handleDecline = async () => {
-      if (!viewingDoc) return;
+    if (!viewingDoc) return;
 
+    const approverName = currentUser ? `${currentUser.first_name} ${currentUser.last_name}` : "Approver";
+    const roleName = currentUser?.role_name || "Approver";
+    const timestamp = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+    try {
+      // 1. Stamp decline authorization card onto PDF
+      const stampedPdfBase64 = await createApprovalStampedPdf({
+        docId: viewingDoc.doc_id,
+        numericDocId: viewingDoc.id,
+        approverName,
+        roleName,
+        timestamp,
+        signatureBase64: (currentUser as any)?.signature,
+        approverUserId: currentUser?.user_id,
+        approvalStage: viewingDoc.approval_stage,
+        isDeclined: true,
+        status: "REJECTED",
+      });
+
+      if (stampedPdfBase64) {
+        await updateDocumentFile(viewingDoc.doc_id, stampedPdfBase64, `Declined by ${approverName}`);
+      }
+
+      // 2. Reject document in database
       const payload = {
         data: {
           docId: viewingDoc.id,
@@ -217,7 +339,6 @@ export default function Approval() {
         }
       };
 
-    try {
       const response = await api.put("/reject-doc", payload);
       
       if (response.data.code === "200") {
@@ -331,7 +452,7 @@ export default function Approval() {
         customerName?: string;
       }) => ({
         ...doc,
-        referenceNumber: doc.doc_id || `REF-${doc.id}`,
+        referenceNumber: doc.doc_id || String(doc.id),
         uploadDate: doc.created_at ? formatDate(doc.created_at) : "—",
         type: doc.doctype_name || "Unknown",
         description: doc.details || "",
@@ -341,6 +462,9 @@ export default function Approval() {
         requested_amount: doc.requested_amount || doc.amount || "0",
         status: (doc.status || "SUBMITTED") as "SUBMITTED" | "PAID" | "APPROVED" | "DRAFT" | "REJECTED",
       }));
+      
+      // Sort newest first
+      formattedDocs.sort((a, b) => (b.id || 0) - (a.id || 0));
       
       setDocuments(formattedDocs);
     } catch (err: unknown) {
@@ -365,13 +489,26 @@ export default function Approval() {
     <div className="p-4 lg:p-6 pt-14 lg:pt-6">
       {/* Header with Date/Time and Theme Toggle */}
       <PageHeader
-        title="Approvals"
-        description="Review and approve pending documents"
+        title="Approvals & History"
+        description="Review pending approvals or search past processed documents"
       />
 
-      {/* Main Card Container */}
-      <div className="rounded-xl bg-card p-4 lg:p-6 shadow-card-md border border-border animate-fade-in">
-        <h2 className="text-lg font-semibold text-foreground mb-4">Approvals</h2>
+      <Tabs defaultValue="pending" className="w-full animate-fade-in">
+        <TabsList className="grid w-full grid-cols-2 max-w-sm h-10 bg-muted/70 mb-4">
+          <TabsTrigger value="pending" className="text-xs flex items-center gap-1.5">
+            <CheckCircle className="h-3.5 w-3.5" />
+            Pending Queue ({documents.length})
+          </TabsTrigger>
+          <TabsTrigger value="history" className="text-xs flex items-center gap-1.5">
+            <History className="h-3.5 w-3.5" />
+            Approval History
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="pending" className="mt-0">
+          {/* Main Card Container */}
+          <div className="rounded-xl bg-card p-4 lg:p-6 shadow-card-md border border-border">
+            <h2 className="text-lg font-semibold text-foreground mb-4">Pending Approvals</h2>
 
         {/* Search and Filters with View Toggle */}
         <div className="flex flex-col lg:flex-row gap-4 mb-6">
@@ -425,7 +562,7 @@ export default function Approval() {
               <Button
                 variant="ghost"
                 size="sm"
-                className={`h-9 px-3 rounded-none ${viewMode === "table" ? "bg-muted" : ""}`}
+                className={`h-9 px-3 rounded-none ${viewMode === "table" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
                 onClick={() => setViewMode("table")}
               >
                 <List className="h-4 w-4" />
@@ -433,7 +570,7 @@ export default function Approval() {
               <Button
                 variant="ghost"
                 size="sm"
-                className={`h-9 px-3 rounded-none ${viewMode === "grid" ? "bg-muted" : ""}`}
+                className={`h-9 px-3 rounded-none ${viewMode === "grid" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
                 onClick={() => setViewMode("grid")}
               >
                 <Grid className="h-4 w-4" />
@@ -478,8 +615,8 @@ export default function Approval() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
-                        {doc.details}
+                      <TableCell className="text-sm text-muted-foreground max-w-[220px] truncate" title={doc.details}>
+                        <span className="truncate block max-w-[200px]">{doc.details || "—"}</span>
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="secondary" className="text-xs font-medium">
@@ -521,7 +658,7 @@ export default function Approval() {
               // Create a properly typed document for DocumentCard
               const documentCardDoc: GeneratedDocument = {
                 id: String(doc.id),
-                referenceNumber: doc.doc_id || `REF-${doc.id}`,
+                referenceNumber: doc.doc_id || String(doc.id),
                 uploadDate: doc.created_at ? formatDate(doc.created_at) : "—",
                 type: doc.doctype_name || "Unknown",
                 description: doc.details || "",
@@ -615,8 +752,16 @@ export default function Approval() {
           </div>
         )}
       </div>
+    </TabsContent>
 
-      {/* View Details Aside - Updated to match EnquiryTab style */}
+    <TabsContent value="history" className="mt-0">
+      <div className="rounded-xl bg-card p-4 lg:p-6 shadow-card-md border border-border">
+        <EnquiryTab />
+      </div>
+    </TabsContent>
+  </Tabs>
+
+  {/* View Details Aside - Updated to match EnquiryTab style */}
 <RightAside
   isOpen={isViewOpen}
   onClose={() => setIsViewOpen(false)}
@@ -645,10 +790,18 @@ export default function Approval() {
               <span className="text-xs text-muted-foreground">Upload Date</span>
               <span className="text-xs font-medium">{formatDate(viewingDoc.created_at)}</span>
             </div>
+            {((viewingDoc as any).created_by || (viewingDoc as any).creator_name || (viewingDoc as any).posted_by) && (
+              <div className="flex justify-between">
+                <span className="text-xs text-muted-foreground font-semibold">Created By / Originator</span>
+                <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                  {(viewingDoc as any).created_by || (viewingDoc as any).creator_name || `Staff ID: ${(viewingDoc as any).posted_by}`}
+                </span>
+              </div>
+            )}
             {viewingDoc.requested_amount && (
               <div className="flex justify-between">
                 <span className="text-xs text-muted-foreground">Requested Amount</span>
-                <span className="text-xs font-medium">${viewingDoc.requested_amount}</span>
+                <span className="text-xs font-medium">{formatAmount(viewingDoc.requested_amount)}</span>
               </div>
             )}
             {viewingDoc.customerNumber && (
@@ -716,28 +869,79 @@ export default function Approval() {
             </div>
           </div>
 
-          {/* Approval Comments */}
+          {/* Approval Comments & Signatures */}
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Approval Comments</Label>
+            <Label className="text-xs text-muted-foreground">Approval Trail & Signatures</Label>
             <div className="space-y-2">
               {Array.isArray(viewingDoc.approvalComments) && viewingDoc.approvalComments.length > 0 ? (
                 viewingDoc.approvalComments.map((comment, index) => (
                   <div 
                     key={comment.activity_id || index} 
-                    className="p-3 rounded-lg border border-border bg-muted/30"
+                    className="p-3 rounded-lg border border-border bg-muted/30 space-y-2"
                   >
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className="text-xs font-medium text-foreground">{comment.approver}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">{comment.approver}</p>
+                        {comment.role_name && (
+                          <span className="text-[10px] text-muted-foreground capitalize">{comment.role_name}</span>
+                        )}
+                      </div>
+                      {comment.created_at && (
+                        <span className="text-[10px] text-muted-foreground">{formatDate(comment.created_at)}</span>
+                      )}
                     </div>
-                    <p className="text-sm text-muted-foreground">{comment.comment}</p>
+                    {comment.comment && (
+                      <p className="text-xs text-muted-foreground">{comment.comment}</p>
+                    )}
+                    {comment.signature && (
+                      <div className="pt-2 border-t border-border/50">
+                        <span className="text-[10px] text-muted-foreground font-medium block mb-1">Approver Signature:</span>
+                        <img 
+                          src={comment.signature} 
+                          alt={`${comment.approver}'s Signature`} 
+                          className="max-h-14 max-w-[160px] object-contain rounded border border-border/60 bg-white dark:bg-slate-900 p-1 shadow-sm"
+                        />
+                      </div>
+                    )}
                   </div>
                 ))
               ) : (
                 <p className="text-sm text-muted-foreground p-3 rounded-lg border border-border bg-muted/30">
-                  No comments available
+                  No approval trail recorded yet
                 </p>
               )}
             </div>
+
+            {/* Awaiting Approvers Section */}
+            {Array.isArray(viewingDoc.awaitingApprovers) && viewingDoc.awaitingApprovers.length > 0 && (
+              <div className="space-y-1.5 pt-3 border-t border-border">
+                <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                  <Clock className="w-3.5 h-3.5" />
+                  <Label className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+                    Awaiting Approvers ({viewingDoc.awaitingApprovers.length})
+                  </Label>
+                </div>
+                <div className="space-y-1.5">
+                  {viewingDoc.awaitingApprovers.map((appr, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2.5 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 flex items-center justify-between"
+                    >
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">{appr.name}</p>
+                        <p className="text-[10px] text-muted-foreground">{appr.role}</p>
+                      </div>
+                      <Badge
+                        variant={appr.isMandatory ? "destructive" : "secondary"}
+                        className="text-[10px] px-1.5 py-0"
+                      >
+                        {appr.isMandatory ? "Mandatory" : "Optional"}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -827,19 +1031,21 @@ export default function Approval() {
             </div>
             <DialogTitle className="text-xl">Approve Request</DialogTitle>
             <DialogDescription>
-              Optionally add a recommended amount and remarks before approving
+              Add your remarks here (Optional)
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div className="space-y-1.5">
-              <Label className="text-sm">Recommended Amount (Optional)</Label>
-              <AmountInput
-                placeholder="0.00"
-                value={recommendedAmount}
-                onValueChange={(rawValue) => setRecommendedAmount(rawValue)}
-              />
-            </div>
+            {/* {(viewingDoc?.trans_type === "1" || Number(viewingDoc?.requested_amount || 0) > 0 || (documentTypes.find(t => String(t.id) === String(viewingDoc?.doctype_id) || t.description === viewingDoc?.doctype_name)?.trans_type === "1")) && (
+              <div className="space-y-1.5">
+                <Label className="text-sm">Recommended Amount (Optional)</Label>
+                <AmountInput
+                  placeholder="0.00"
+                  value={recommendedAmount}
+                  onValueChange={(rawValue) => setRecommendedAmount(rawValue)}
+                />
+              </div>
+            )} */}
 
             <div className="space-y-1.5">
               <Label className="text-sm">Remarks (Optional)</Label>
@@ -900,6 +1106,13 @@ export default function Approval() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Minimalist Signing Animation Overlay */}
+      <SigningAnimationModal
+        isOpen={isSigningAnimating}
+        approverName={currentUser ? `${currentUser.first_name} ${currentUser.last_name}` : "Approver"}
+        roleName={currentUser?.role_name || "Approver"}
+        docId={viewingDoc?.doc_id || ""}
+      />
     </div>
   );
 }

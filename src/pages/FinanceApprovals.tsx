@@ -7,7 +7,8 @@
 
 import { ApprovalSkeleton } from "@/components/skeletons/ApprovalSkeleton";
 import { useState, useEffect, useCallback } from "react";
-import { Eye, FileText, CheckCircle, XCircle, Search, DollarSign, Grid, List, ExternalLink, Download, X } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { Eye, FileText, CheckCircle, XCircle, Search, DollarSign, Grid, List, ExternalLink, Download, X, History } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { RightAside } from "@/components/shared/RightAside";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EnquiryTab } from "@/components/capture/EnquiryTab";
+import { computeAwaitingApprovers } from "@/lib/approvalUtils";
 import { useToast } from "@/hooks/use-toast";
 import { getCurrentUser } from "@/lib/auth";
 import {
@@ -48,8 +52,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import api from "@/lib/api";
+import { createApprovalStampedPdf, updateDocumentFile } from "@/lib/documentStamper";
+import { SigningAnimationModal } from "@/components/shared/SigningAnimationModal";
 import { DocumentCard } from "../components/capture/DocumentCard";
 import { GeneratedDocument } from "../components/capture/GeneratedTab";
+
+import { formatAmount } from "@/lib/utils";
 
 interface FinanceApprovalDocument {
   id: number;
@@ -59,12 +67,15 @@ interface FinanceApprovalDocument {
   doctype_name: string;
   approval_stage: number;
   status: "SUBMITTED" | "PAID" | "APPROVED" | "DRAFT" | "REJECTED";
-  requested_amount: string;
-  customerNumber: string;
-  customerName: string;
+  requested_amount?: string;
+  customerNumber?: string;
+  customerName?: string;
+  posted_by?: number | string;
+  doctype_id?: number | string;
+  trans_type?: string;
   customer_no?: string;
   customer_desc?: string;
-  finance_comments?: { comment: string; approver: string; activity_id: number }[] | string;
+  finance_comments?: { comment: string; approver: string; activity_id: number; signature?: string; role_name?: string; created_at?: string }[] | string;
   documents?: [];
   amount?: string;
   // Finance-specific fields
@@ -105,6 +116,9 @@ const formatDate = (isoString: string) => {
 export default function FinanceApprovals() {
   const { toast } = useToast();
   const currentUser = getCurrentUser();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab") || "pending";
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
   const [isLoading, setIsLoading] = useState(true);
   const [documents, setDocuments] = useState<FinanceApprovalDocument[]>([]);
   const [documentTypes, setDocumentTypes] = useState<{id: number, description: string}[]>([]);
@@ -122,6 +136,7 @@ export default function FinanceApprovals() {
   const [isFinanceApproveOpen, setIsFinanceApproveOpen] = useState(false);
   const [financeApproveRemarks, setFinanceApproveRemarks] = useState("");
   const [approvedAmount, setApprovedAmount] = useState("");
+  const [isSigningAnimating, setIsSigningAnimating] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("");
   const [accountCode, setAccountCode] = useState("");
 
@@ -148,12 +163,32 @@ export default function FinanceApprovals() {
     return matchesSearch && matchesStatus && matchesType;
   });
 
+  const deepDocId = searchParams.get("docId");
+
   const handleView = async (doc: FinanceApprovalDocument) => {
     try {
       const res = await api.get(`/get-doc/${doc.id}`);
-      console.log("Finance comments response:", res.data.expense_details.account_name);
-      
-      setViewingDoc({...doc, db_account: res.data.expense_details.account_number, db_account_name: res.data.expense_details.account_name});
+      const commentsRes = await api.get(`/get-approval-comments/${doc.id}`).catch(() => ({ data: { comments: [] } }));
+      const comments = Array.isArray(commentsRes.data?.comments) ? commentsRes.data.comments : [];
+
+      let awaitingApprovers: { name: string; role: string; stage: number; isMandatory: boolean }[] = [];
+      try {
+        const setupRes = await api.get<{ setups: any[] }>("/get-approver-setups");
+        const docSetup = setupRes.data?.setups?.find((s: any) => String(s.doctype_id) === String((doc as any).doctype_id));
+        if (docSetup && docSetup.details) {
+          awaitingApprovers = computeAwaitingApprovers(docSetup.details, Number((doc as any).approval_stage || 1), comments);
+        }
+      } catch (setupErr) {
+        console.warn("Could not fetch awaiting approvers:", setupErr);
+      }
+
+      setViewingDoc({
+        ...doc,
+        db_account: res.data?.expense_details?.account_number,
+        db_account_name: res.data?.expense_details?.account_name,
+        approvalComments: comments,
+        awaitingApprovers,
+      } as any);
       setIsViewOpen(true);
     } catch (error) {
       console.error("Error fetching finance comments:", error);
@@ -161,6 +196,49 @@ export default function FinanceApprovals() {
       setIsViewOpen(true);
     }
   };
+
+  useEffect(() => {
+    if (deepDocId && !isViewOpen) {
+      const targetDoc = documents.find(
+        (d) => d.doc_id === deepDocId || String(d.id) === deepDocId
+      );
+      if (targetDoc) {
+        handleView(targetDoc);
+      } else {
+        // Fetch directly from backend API so right-aside opens immediately
+        api.get(`/get-doc/${deepDocId}`)
+          .then((res) => {
+            const mockDoc: FinanceApprovalDocument = {
+              id: Number(deepDocId) || 0,
+              doc_id: deepDocId,
+              doctype_name: "Finance Review",
+              details: `Finance review for ${deepDocId}`,
+              status: "SUBMITTED",
+              approval_stage: 1,
+              created_at: new Date().toISOString(),
+              posted_by: "",
+              db_account: res.data?.expense_details?.account_number,
+              db_account_name: res.data?.expense_details?.account_name,
+            };
+            setViewingDoc(mockDoc);
+            setIsViewOpen(true);
+          })
+          .catch(() => {
+            setViewingDoc({
+              id: 0,
+              doc_id: deepDocId,
+              doctype_name: "Finance Review",
+              details: `Finance review for ${deepDocId}`,
+              status: "SUBMITTED",
+              approval_stage: 1,
+              created_at: new Date().toISOString(),
+              posted_by: "",
+            });
+            setIsViewOpen(true);
+          });
+      }
+    }
+  }, [deepDocId, documents]);
 
   const handleOpenFinanceApprove = () => {
     if (viewingDoc) {
@@ -175,40 +253,68 @@ export default function FinanceApprovals() {
   const handleFinanceApprove = async () => {
     if (!viewingDoc) return;
 
-    const payload = {
-      data:{
-        docId: viewingDoc.id,
-        userId: currentUser?.user_id,
-        approved_amount: approvedAmount || viewingDoc.requested_amount,
-        remarks: financeApproveRemarks || "",
-        db_account:viewingDoc.db_account,
-        cr_account: viewingDoc.customerNumber,
-        customerDesc: viewingDoc.customer_desc,
-        trans_type: viewingDoc.doctype_name
-      }
-    };
+    setIsSigningAnimating(true);
+
+    const approverName = currentUser ? `${currentUser.first_name} ${currentUser.last_name}` : "Finance Approver";
+    const roleName = currentUser?.role_name || "Finance";
+    const timestamp = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
     try {
-      const response = await api.post("/make-transaction", payload);
-      
-      if (response.data.code === "200") {
-        setDocuments((prev) => prev.filter((doc) => doc.id !== viewingDoc.id));
-        toast({
-          title: "Document Finance Approved",
-          description: `${viewingDoc.doc_id} has been approved by finance.`,
-        });
-        setIsFinanceApproveOpen(false);
-        setIsViewOpen(false);
-        setViewingDoc(null);
-      }else{
-        toast({
-          title: "Error",
-          description: response.data.message || "Failed to approve document for finance",
-          variant: "destructive",
-        });
+      // 1. Stamp approval block onto last page of existing PDF (WITHOUT remarks)
+      const stampedPdfBase64 = await createApprovalStampedPdf({
+        docId: viewingDoc.doc_id,
+        numericDocId: viewingDoc.id,
+        approverName,
+        roleName,
+        timestamp,
+        signatureBase64: (currentUser as any)?.signature,
+        approverUserId: currentUser?.user_id,
+        approvalStage: viewingDoc.approval_stage,
+      });
+
+      // 2. Upload stamped PDF via FormData to /dms/api/update_document_api.php
+      if (stampedPdfBase64) {
+        await updateDocumentFile(viewingDoc.doc_id, stampedPdfBase64, `Finance approved by ${approverName}`);
       }
+
+      // 3. Update database via backend POST /make-transaction
+      const payload = {
+        data: {
+          docId: viewingDoc.id,
+          userId: currentUser?.user_id,
+          approved_amount: approvedAmount || viewingDoc.requested_amount,
+          remarks: financeApproveRemarks || "",
+          db_account: viewingDoc.db_account,
+          cr_account: viewingDoc.customerNumber,
+          customerDesc: viewingDoc.customer_desc,
+          trans_type: viewingDoc.doctype_name
+        }
+      };
+
+      const response = await api.post("/make-transaction", payload);
+
+      setTimeout(() => {
+        setIsSigningAnimating(false);
+        if (response.data.code === "200") {
+          setDocuments((prev) => prev.filter((doc) => doc.id !== viewingDoc.id));
+          toast({
+            title: "Document Finance Approved",
+            description: `${viewingDoc.doc_id} has been signed & approved by finance.`,
+          });
+          setIsFinanceApproveOpen(false);
+          setIsViewOpen(false);
+          setViewingDoc(null);
+        } else {
+          toast({
+            title: "Error",
+            description: response.data.message || "Failed to approve document for finance",
+            variant: "destructive",
+          });
+        }
+      }, 10500);
     } catch (error) {
       console.error("Finance approval failed:", error);
+      setIsSigningAnimating(false);
       toast({
         title: "Error",
         description: "Failed to approve document for finance",
@@ -223,18 +329,41 @@ export default function FinanceApprovals() {
   };
 
   const handleFinanceDecline = async () => {
-        if (!viewingDoc) return;
-  
-        const payload = {
-          data: {
-            docId: viewingDoc.id,
-            userId: currentUser?.user_id,
-            remarks: financeDeclineRemarks || "",
-          }
-        };
-  
-      try {
-        const response = await api.put("/reject-doc", payload);
+    if (!viewingDoc) return;
+
+    const approverName = currentUser ? `${currentUser.first_name} ${currentUser.last_name}` : "Finance Approver";
+    const roleName = currentUser?.role_name || "Finance";
+    const timestamp = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+    try {
+      // 1. Stamp decline authorization card onto PDF
+      const stampedPdfBase64 = await createApprovalStampedPdf({
+        docId: viewingDoc.doc_id,
+        numericDocId: viewingDoc.id,
+        approverName,
+        roleName,
+        timestamp,
+        signatureBase64: (currentUser as any)?.signature,
+        approverUserId: currentUser?.user_id,
+        approvalStage: viewingDoc.approval_stage,
+        isDeclined: true,
+        status: "REJECTED",
+      });
+
+      if (stampedPdfBase64) {
+        await updateDocumentFile(viewingDoc.doc_id, stampedPdfBase64, `Finance declined by ${approverName}`);
+      }
+
+      // 2. Reject document in database
+      const payload = {
+        data: {
+          docId: viewingDoc.id,
+          userId: currentUser?.user_id,
+          remarks: financeDeclineRemarks || "",
+        }
+      };
+
+      const response = await api.put("/reject-doc", payload);
         
         if (response.data.code === "200") {
             setDocuments((prev) => prev.filter((doc) => doc.id !== viewingDoc.id));
@@ -351,7 +480,7 @@ export default function FinanceApprovals() {
         tax_amount?: string;
       }) => ({
         ...doc,
-        referenceNumber: doc.doc_id || `REF-${doc.id}`,
+        referenceNumber: doc.doc_id || String(doc.id),
         uploadDate: doc.created_at ? formatDate(doc.created_at) : "—",
         type: doc.doctype_name || "Unknown",
         description: doc.details || "",
@@ -366,6 +495,9 @@ export default function FinanceApprovals() {
         tax_amount: doc.tax_amount,
       }));
       
+      // Sort newest first
+      formattedDocs.sort((a, b) => (b.id || 0) - (a.id || 0));
+
       setDocuments(formattedDocs);
     } catch (err: unknown) {
       console.error("Failed to fetch finance pending documents:", err);
@@ -393,9 +525,29 @@ export default function FinanceApprovals() {
         description="Review and approve pending documents for finance department"
       />
 
-      {/* Main Card Container */}
-      <div className="rounded-xl bg-card p-4 lg:p-6 shadow-card-md border border-border animate-fade-in">
-        <h2 className="text-lg font-semibold text-foreground mb-4">Finance Approvals Queue</h2>
+      <Tabs
+        value={activeTab}
+        onValueChange={(val) => {
+          setActiveTab(val);
+          setSearchParams({ tab: val });
+        }}
+        className="w-full"
+      >
+        <TabsList className="bg-blue-50 grid w-full grid-cols-2 lg:w-96 mb-6">
+          <TabsTrigger value="pending" className="flex items-center gap-2 text-xs font-semibold">
+            <DollarSign className="w-4 h-4 text-emerald-600" />
+            <span>Pending Approvals</span>
+          </TabsTrigger>
+          <TabsTrigger value="history" className="flex items-center gap-2 text-xs font-semibold">
+            <History className="w-4 h-4 text-blue-600" />
+            <span>Approval History</span>
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="pending" className="space-y-4">
+          {/* Main Card Container */}
+          <div className="rounded-xl bg-card p-4 lg:p-6 shadow-card-md border border-border animate-fade-in">
+            <h2 className="text-lg font-semibold text-foreground mb-4">Finance Approvals Queue</h2>
 
         {/* Search and Filters with View Toggle */}
         <div className="flex flex-col lg:flex-row gap-4 mb-6">
@@ -495,7 +647,7 @@ export default function FinanceApprovals() {
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100">
-                            <DollarSign className="h-4 w-4 text-emerald-600" />
+                            <FileText className="h-4 w-4 text-emerald-600" />
                           </div>
                           <div>
                             <p className="text-sm font-medium">{doc.doc_id}</p>
@@ -503,11 +655,11 @@ export default function FinanceApprovals() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
-                        {doc.details}
+                      <TableCell className="text-sm text-muted-foreground max-w-[220px] truncate" title={doc.details}>
+                        <span className="truncate block max-w-[200px]">{doc.details || "—"}</span>
                       </TableCell>
                       <TableCell className="text-center font-medium text-green-600">
-                        ${doc.requested_amount || doc.amount || "0.00"}
+                        {doc.requested_amount || doc.amount || "0.00"}
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="secondary" className="text-xs font-medium">
@@ -549,7 +701,7 @@ export default function FinanceApprovals() {
               // Create a properly typed document for DocumentCard
               const documentCardDoc: GeneratedDocument = {
                 id: String(doc.id),
-                referenceNumber: doc.doc_id || `REF-${doc.id}`,
+                referenceNumber: doc.doc_id || String(doc.id),
                 uploadDate: doc.created_at ? formatDate(doc.created_at) : "—",
                 type: doc.doctype_name || "Unknown",
                 description: doc.details || "",
@@ -646,6 +798,15 @@ export default function FinanceApprovals() {
           </div>
         )}
       </div>
+    </TabsContent>
+
+        <TabsContent value="history" className="space-y-4">
+          <div className="rounded-xl bg-card p-4 lg:p-6 shadow-card-md border border-border animate-fade-in">
+            <h2 className="text-lg font-semibold text-foreground mb-4">Finance Approval & Decline History</h2>
+            <EnquiryTab />
+          </div>
+        </TabsContent>
+      </Tabs>
 
       {/* View Details Aside - Updated to match EnquiryTab style */}
 <RightAside
@@ -676,10 +837,18 @@ export default function FinanceApprovals() {
               <span className="text-xs text-muted-foreground">Upload Date</span>
               <span className="text-xs font-medium">{formatDate(viewingDoc.created_at)}</span>
             </div>
+            {((viewingDoc as any).created_by || (viewingDoc as any).creator_name || (viewingDoc as any).posted_by) && (
+              <div className="flex justify-between">
+                <span className="text-xs text-muted-foreground font-semibold">Created By / Originator</span>
+                <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                  {(viewingDoc as any).created_by || (viewingDoc as any).creator_name || `Staff ID: ${(viewingDoc as any).posted_by}`}
+                </span>
+              </div>
+            )}
             {viewingDoc.requested_amount && (
               <div className="flex justify-between">
                 <span className="text-xs text-muted-foreground">Requested Amount</span>
-                <span className="text-xs font-medium">${viewingDoc.requested_amount}</span>
+                <span className="text-xs font-medium">{formatAmount(viewingDoc.requested_amount)}</span>
               </div>
             )}
             {viewingDoc.customerNumber && (
@@ -771,21 +940,40 @@ export default function FinanceApprovals() {
               </div>
             </div>
           )}
-
-          {/* Finance Comments */}
+                {/* Finance Comments & Signatures */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium">Finance Review Comments</Label>
+            <Label className="text-xs text-muted-foreground">Finance Audit Trail & Signatures</Label>
             <div className="space-y-2">
               {Array.isArray(viewingDoc.finance_comments) && viewingDoc.finance_comments.length > 0 ? (
                 viewingDoc.finance_comments.map((comment, index) => (
                   <div 
                     key={comment.activity_id || index} 
-                    className="p-3 rounded-lg border border-border bg-blue-50 dark:bg-blue-900/10"
+                    className="p-3 rounded-lg border border-border bg-blue-50 dark:bg-blue-900/10 space-y-2"
                   >
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className="text-xs font-medium text-foreground">{comment.approver}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">{comment.approver}</p>
+                        {comment.role_name && (
+                          <span className="text-[10px] text-muted-foreground capitalize">{comment.role_name}</span>
+                        )}
+                      </div>
+                      {comment.created_at && (
+                        <span className="text-[10px] text-muted-foreground">{formatDate(comment.created_at)}</span>
+                      )}
                     </div>
-                    <p className="text-sm text-muted-foreground">{comment.comment}</p>
+                    {comment.comment && (
+                      <p className="text-xs text-muted-foreground">{comment.comment}</p>
+                    )}
+                    {comment.signature && (
+                      <div className="pt-2 border-t border-border/50">
+                        <span className="text-[10px] text-muted-foreground font-medium block mb-1">Approver Signature:</span>
+                        <img 
+                          src={comment.signature} 
+                          alt={`${comment.approver}'s Signature`} 
+                          className="max-h-14 max-w-[160px] object-contain rounded border border-border/60 bg-white dark:bg-slate-900 p-1 shadow-sm"
+                        />
+                      </div>
+                    )}
                   </div>
                 ))
               ) : (
@@ -896,7 +1084,7 @@ export default function FinanceApprovals() {
                 onChange={(e) => setApprovedAmount(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Requested: ${viewingDoc?.requested_amount || "0.00"}
+                Requested: {formatAmount(viewingDoc?.requested_amount)}
               </p>
             </div>
 
@@ -990,6 +1178,13 @@ export default function FinanceApprovals() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Minimalist Signing Animation Overlay */}
+      <SigningAnimationModal
+        isOpen={isSigningAnimating}
+        approverName={currentUser ? `${currentUser.first_name} ${currentUser.last_name}` : "Approver"}
+        roleName={currentUser?.role_name || "Finance"}
+        docId={viewingDoc?.doc_id || ""}
+      />
     </div>
   );
 }

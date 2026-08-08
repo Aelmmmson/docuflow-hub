@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DocumentForm } from "@/components/capture/DocumentForm";
 import { GeneratedTab, GeneratedDocument } from "@/components/capture/GeneratedTab";
@@ -16,10 +17,23 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { FileInput, FileText, Search } from "lucide-react";
 
 export default function DocumentCapture() {
-  const [activeTab, setActiveTab] = useState("request");
+  const [searchParams] = useSearchParams();
+  const urlTab = searchParams.get("tab");
+  const urlDocId = searchParams.get("docId");
+
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    if (urlTab === "enquiry" || urlDocId) return "enquiry";
+    return "request";
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [newDocuments, setNewDocuments] = useState<GeneratedDocument[]>([]);
+
+  useEffect(() => {
+    if (urlTab === "enquiry" || urlDocId) {
+      setActiveTab("enquiry");
+    }
+  }, [urlTab, urlDocId]);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 1000);

@@ -6,10 +6,11 @@
  */
 
 import { useState, useEffect } from "react";
-import { FileText, Eye, AlertCircle, ExternalLink, Download, X, Grid, List, Search } from "lucide-react";
+import { FileText, Eye, AlertCircle, ExternalLink, Download, X, Grid, List, Search, Clock, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
   TooltipContent,
@@ -27,6 +28,8 @@ import { SearchFilter } from "@/components/shared/SearchFilter";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { RightAside } from "@/components/shared/RightAside";
+import { useSearchParams } from "react-router-dom";
+import { computeAwaitingApprovers } from "@/lib/approvalUtils";
 import { useToast } from "@/hooks/use-toast";
 import api from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
@@ -55,6 +58,8 @@ interface Document {
   doctype_name?: string;
   created_at?: string;
   stage_updated_at?: string;
+  approvalComments?: any[];
+  awaitingApprovers?: { name: string; role: string; stage: number; isMandatory: boolean }[];
 }
 
 interface BackendDocument {
@@ -92,6 +97,10 @@ export function EnquiryTab() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState<DateRange | null>(null);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // View aside
   const [isViewOpen, setIsViewOpen] = useState(false);
@@ -134,7 +143,7 @@ export function EnquiryTab() {
         const mapped = raw.map((d) => ({
           id: d.id,
           decline_reason: d.decline_reason,
-          referenceNumber: d.doc_id || `REF-${d.id}`,
+          referenceNumber: d.doc_id || String(d.id),
           uploadDate: d.created_at
             ? new Date(d.created_at).toISOString().split("T")[0]
             : d.stage_updated_at
@@ -157,7 +166,12 @@ export function EnquiryTab() {
           doctype_name: d.doctype_name,
           created_at: d.created_at || undefined,
           stage_updated_at: d.stage_updated_at || undefined,
+          approval_stage: (d as any).approval_stage ? Number((d as any).approval_stage) : 1,
+          created_by: (d as any).created_by || (d as any).creator_name || (d as any).posted_by ? String((d as any).created_by || (d as any).creator_name || `Staff ID: ${(d as any).posted_by}`) : undefined,
         }));
+
+        // Sort newest first
+        mapped.sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
 
         setDocuments(mapped);
       } catch (err: unknown) {
@@ -230,11 +244,74 @@ export function EnquiryTab() {
     return matchesSearch && matchesStatus && matchesType && matchesDate;
   });
 
-  const handleView = (doc: Document) => {
-    console.log("Viewing document:", doc);
-    setViewingDoc(doc);
-    setIsViewOpen(true);
+  const handleView = async (doc: Document) => {
+    try {
+      const res = await api.get(`/get-approval-comments/${doc.id}`);
+      const comments = Array.isArray(res.data.comments) ? res.data.comments : [];
+
+      let awaitingApprovers: { name: string; role: string; stage: number; isMandatory: boolean }[] = [];
+      try {
+        const setupRes = await api.get<{ setups: any[] }>("/get-approver-setups");
+        const docSetup = setupRes.data?.setups?.find((s: any) => String(s.doctype_id) === String((doc as any).doctype_id));
+        if (docSetup && docSetup.details) {
+          awaitingApprovers = computeAwaitingApprovers(docSetup.details, Number((doc as any).approval_stage || 1), comments);
+        }
+      } catch (setupErr) {
+        console.warn("Could not fetch awaiting approvers:", setupErr);
+      }
+
+      setViewingDoc({ ...doc, approvalComments: comments, awaitingApprovers });
+      setIsViewOpen(true);
+    } catch (error) {
+      console.error("Error fetching approval comments:", error);
+      setViewingDoc(doc);
+      setIsViewOpen(true);
+    }
   };
+
+  const [searchParams] = useSearchParams();
+  const deepDocId = searchParams.get("docId");
+
+  useEffect(() => {
+    if (deepDocId && !isViewOpen) {
+      const targetDoc = documents.find(
+        (d) => d.referenceNumber === deepDocId || d.doc_id === deepDocId || String(d.id) === deepDocId
+      );
+      if (targetDoc) {
+        handleView(targetDoc);
+      } else {
+        api.get(`/get-doc/${deepDocId}`)
+          .then((res) => {
+            const d = res.data?.result?.[0] || res.data;
+            if (d) {
+              const mockDoc: Document = {
+                id: d.id || 0,
+                referenceNumber: d.doc_id || deepDocId,
+                uploadDate: d.created_at ? new Date(d.created_at).toISOString().split("T")[0] : "—",
+                type: d.doctype_name || "Document",
+                description: d.details || "",
+                status: d.status || "SUBMITTED",
+                doc_id: d.doc_id || deepDocId,
+                doctype_name: d.doctype_name,
+                created_at: d.created_at,
+              };
+              handleView(mockDoc);
+            }
+          })
+          .catch(() => {
+            handleView({
+              id: 0,
+              referenceNumber: deepDocId,
+              uploadDate: "—",
+              type: "Document Review",
+              description: `Review for ${deepDocId}`,
+              status: "SUBMITTED",
+              doc_id: deepDocId,
+            });
+          });
+      }
+    }
+  }, [deepDocId, documents]);
 
   const handleShowDeclinedReason = (doc: Document) => {
     setDeclinedDoc(doc);
@@ -313,7 +390,16 @@ export function EnquiryTab() {
     { key: "uploadDate", header: "Date" },
     { key: "type", header: "Type", render: (doc) => <span>{toTitleCase(doc.type)}</span> },
     { key: "amount", header: "Amount", render: (doc) => <span>{formatAmount(doc.amount)}</span> },
-    { key: "description", header: "Description" },
+    {
+      key: "description",
+      header: "Description",
+      className: "max-w-[200px] truncate text-xs",
+      render: (doc) => (
+        <span className="truncate max-w-[180px] inline-block" title={doc.description}>
+          {doc.description || "—"}
+        </span>
+      ),
+    },
     {
       key: "status",
       header: "Status",
@@ -365,7 +451,7 @@ export function EnquiryTab() {
             <Button
               variant="ghost"
               size="sm"
-              className={`h-8 px-3 rounded-none ${viewMode === "table" ? "bg-muted" : "bg-background hover:bg-muted/50"}`}
+              className={`h-8 px-3 rounded-none ${viewMode === "table" ? "bg-muted text-foreground" : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground"}`}
               onClick={() => setViewMode("table")}
             >
               <List className="h-4 w-4" />
@@ -373,7 +459,7 @@ export function EnquiryTab() {
             <Button
               variant="ghost"
               size="sm"
-              className={`h-8 px-3 rounded-none border-l ${viewMode === "grid" ? "bg-muted" : "bg-background hover:bg-muted/50"}`}
+              className={`h-8 px-3 rounded-none border-l ${viewMode === "grid" ? "bg-muted text-foreground" : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground"}`}
               onClick={() => setViewMode("grid")}
             >
               <Grid className="h-4 w-4" />
@@ -452,39 +538,103 @@ export function EnquiryTab() {
         </p>
       )}
 
-      {/* Table View */}
-      {viewMode === "table" && (
-        <div className="rounded-lg border border-border">
-          <DataTable
-            data={filteredDocuments}
-            columns={columns}
-            keyExtractor={(doc) => String(doc.id)}
-            emptyMessage="No documents found"
-          />
-        </div>
-      )}
+      {/* Calculate pagination */}
+      {(() => {
+        const totalPages = Math.ceil(filteredDocuments.length / itemsPerPage);
+        const paginatedDocuments = filteredDocuments.slice(
+          (currentPage - 1) * itemsPerPage,
+          currentPage * itemsPerPage
+        );
 
+        return (
+          <>
+            {/* Table View */}
+            {viewMode === "table" && (
+              <div className="rounded-lg border border-border">
+                <DataTable
+                  data={paginatedDocuments}
+                  columns={columns}
+                  keyExtractor={(doc) => String(doc.id)}
+                  emptyMessage="No documents found"
+                />
+              </div>
+            )}
 
-      {/* Grid View */}
-      {viewMode === "grid" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-8 px-2">
-          {filteredDocuments.map((doc) => (
-            <DocumentCard
-              key={doc.id}
-              document={{
-                ...doc,
-                id: String(doc.id),
-              }}
-              mode="enquiry" // Set mode to enquiry
-              onView={() => handleView(doc)}
-              onShowRejectionReason={doc.status === "REJECTED" ? () => handleShowDeclinedReason(doc) : undefined}
-              // Add onShowApprovalDetails if you have that functionality
-              onViewDocument={() => handleViewDocumentFromCard(doc)}
-            // Don't pass onEdit or onSubmit for enquiry mode
-            />
-          ))}
-        </div>
-      )}
+            {/* Grid View */}
+            {viewMode === "grid" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-8 px-2">
+                {paginatedDocuments.map((doc) => (
+                  <DocumentCard
+                    key={doc.id}
+                    document={{
+                      ...doc,
+                      id: String(doc.id),
+                    }}
+                    mode="enquiry"
+                    onView={() => handleView(doc)}
+                    onShowRejectionReason={doc.status === "REJECTED" ? () => handleShowDeclinedReason(doc) : undefined}
+                    onViewDocument={() => handleViewDocumentFromCard(doc)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Pagination Bar */}
+            {filteredDocuments.length > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-border">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Rows per page:</span>
+                  <Select
+                    value={String(itemsPerPage)}
+                    onValueChange={(val) => {
+                      setItemsPerPage(Number(val));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-16 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[5, 10, 20, 50].map((size) => (
+                        <SelectItem key={size} value={String(size)} className="text-xs">
+                          {size}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <span className="text-xs text-muted-foreground ml-2">
+                    Showing {Math.min((currentPage - 1) * itemsPerPage + 1, filteredDocuments.length)} - {Math.min(currentPage * itemsPerPage, filteredDocuments.length)} of {filteredDocuments.length}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-xs font-medium px-2">
+                    Page {currentPage} of {totalPages || 1}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                    disabled={currentPage >= totalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* View Document Aside – Updated with Code A's design */}
       <RightAside
@@ -513,6 +663,14 @@ export function EnquiryTab() {
                 <span className="text-xs text-muted-foreground">Upload Date</span>
                 <span className="text-xs font-medium">{viewingDoc.uploadDate}</span>
               </div>
+              {((viewingDoc as any).created_by || (viewingDoc as any).creator_name || (viewingDoc as any).posted_by) && (
+                <div className="flex justify-between">
+                  <span className="text-xs text-muted-foreground font-semibold">Created By / Originator</span>
+                  <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                    {(viewingDoc as any).created_by || (viewingDoc as any).creator_name || `Staff ID: ${(viewingDoc as any).posted_by}`}
+                  </span>
+                </div>
+              )}
               {viewingDoc.amount && (
                 <div className="flex justify-between">
                   <span className="text-xs text-muted-foreground">Requested Amount</span>
@@ -605,6 +763,83 @@ export function EnquiryTab() {
                 </p>
               </div>
             )}
+
+            {/* Approval Trail & Signatures */}
+            <div className="space-y-1.5 pt-3 border-t border-border">
+              <Label className="text-xs text-muted-foreground">Approval Trail & Signatures</Label>
+              <div className="space-y-2">
+                {Array.isArray(viewingDoc.approvalComments) && viewingDoc.approvalComments.length > 0 ? (
+                  viewingDoc.approvalComments.map((comment: any, index: number) => (
+                    <div 
+                      key={comment.activity_id || index} 
+                      className="p-3 rounded-lg border border-border bg-muted/30 space-y-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-semibold text-foreground">{comment.approver}</p>
+                          {comment.role_name && (
+                            <span className="text-[10px] text-muted-foreground capitalize">{comment.role_name}</span>
+                          )}
+                        </div>
+                        {comment.created_at && (
+                          <span className="text-[10px] text-muted-foreground">
+                            {new Date(comment.created_at).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                      {comment.comment && (
+                        <p className="text-xs text-muted-foreground">{comment.comment}</p>
+                      )}
+                      {comment.signature && (
+                        <div className="pt-2 border-t border-border/50">
+                          <span className="text-[10px] text-muted-foreground font-medium block mb-1">Approver Signature:</span>
+                          <img 
+                            src={comment.signature} 
+                            alt={`${comment.approver}'s Signature`} 
+                            className="max-h-14 max-w-[160px] object-contain rounded border border-border/60 bg-white dark:bg-slate-900 p-1 shadow-sm"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground p-3 rounded-lg border border-border bg-muted/30">
+                    No approval trail recorded yet
+                  </p>
+                )}
+              </div>
+
+              {/* Awaiting Approvers Section */}
+              {Array.isArray(viewingDoc.awaitingApprovers) && viewingDoc.awaitingApprovers.length > 0 && (
+                <div className="space-y-1.5 pt-3 border-t border-border">
+                  <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                    <Clock className="w-3.5 h-3.5" />
+                    <Label className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+                      Awaiting Approvers ({viewingDoc.awaitingApprovers.length})
+                    </Label>
+                  </div>
+                  <div className="space-y-1.5">
+                    {viewingDoc.awaitingApprovers.map((appr, idx) => (
+                      <div
+                        key={idx}
+                        className="p-2.5 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 flex items-center justify-between"
+                      >
+                        <div>
+                          <p className="text-xs font-semibold text-foreground">{appr.name}</p>
+                          <p className="text-[10px] text-muted-foreground">{appr.role}</p>
+                        </div>
+                        <Badge
+                          variant={appr.isMandatory ? "destructive" : "secondary"}
+                          className="text-[10px] px-1.5 py-0"
+                        >
+                          {appr.isMandatory ? "Mandatory" : "Optional"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Rejection Reason like Code A */}
             {viewingDoc.status === "REJECTED" && viewingDoc.decline_reason && (

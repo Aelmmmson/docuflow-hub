@@ -5,11 +5,17 @@
  */
 
 import { useState, useEffect } from "react";
-import { Plus, Edit2, Save } from "lucide-react";
+import { Plus, Edit2, Save, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -20,7 +26,6 @@ import {
 import { SearchFilter } from "@/components/shared/SearchFilter";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { ActionMenu } from "@/components/shared/ActionMenu";
 import { RightAside } from "@/components/shared/RightAside";
 import { useToast } from "@/hooks/use-toast";
 import api from "@/lib/api";
@@ -36,7 +41,7 @@ interface RawBeneficiary {
   beneficiary_name: string;
   account_number: string;
   description: string | null;
-  status: string | number;     // ← accept both string "1"/"0" and number
+  status: string | number;
   posted_by?: number;
   created_at?: string | null;
   updated_at?: string | null;
@@ -71,7 +76,49 @@ export function BeneficiaryTab() {
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<string>("Active");
 
-  const MAX_DESCRIPTION_LENGTH = 255;
+  // Account verification states
+  const [verifyingAccount, setVerifyingAccount] = useState(false);
+  const [accountVerified, setAccountVerified] = useState(false);
+  const [accountDetails, setAccountDetails] = useState<{
+    accountDescrp?: string;
+    descrp?: string;
+    customerName?: string;
+    currency?: string;
+    branch?: string;
+  } | null>(null);
+
+  // Silent debounced account verification
+  useEffect(() => {
+    const cleanNumber = accountNumber.trim();
+    if (cleanNumber.length < 4) {
+      setAccountVerified(false);
+      setAccountDetails(null);
+      setVerifyingAccount(false);
+      return;
+    }
+
+    setVerifyingAccount(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.get(`/get-account-lookup/${encodeURIComponent(cleanNumber)}`);
+        const details = res.data?.data;
+        if (details) {
+          setAccountVerified(true);
+          setAccountDetails(details);
+        } else {
+          setAccountVerified(false);
+          setAccountDetails(null);
+        }
+      } catch {
+        setAccountVerified(false);
+        setAccountDetails(null);
+      } finally {
+        setVerifyingAccount(false);
+      }
+    }, 450);
+
+    return () => clearTimeout(timer);
+  }, [accountNumber]);
 
   // ────────────────────────────────────────────────
   //  Fetch all beneficiaries
@@ -140,6 +187,8 @@ export function BeneficiaryTab() {
     setAccountNumber("");
     setDescription("");
     setStatus("Active");
+    setAccountVerified(false);
+    setAccountDetails(null);
     setIsAsideOpen(true);
   };
 
@@ -149,6 +198,8 @@ export function BeneficiaryTab() {
     setAccountNumber(ben.accountNumber);
     setDescription(ben.description);
     setStatus(ben.status);
+    setAccountVerified(false);
+    setAccountDetails(null);
     setIsAsideOpen(true);
   };
 
@@ -214,17 +265,25 @@ export function BeneficiaryTab() {
     {
       key: "actions",
       header: "Action",
-      className: "w-16",
+      className: "w-16 text-right",
       render: (ben) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 w-8 p-0"
-          onClick={() => handleEdit(ben)}
-          title="Edit beneficiary"
-        >
-          <Edit2 className="h-4 w-4" />
-        </Button>
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 text-muted-foreground hover:bg-primary hover:text-white transition-colors"
+                onClick={() => handleEdit(ben)}
+              >
+                <Edit2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Edit Beneficiary</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       ),
     },
   ];
@@ -298,13 +357,57 @@ export function BeneficiaryTab() {
             <Label htmlFor="accountNumber" className="text-xs font-medium">
               Account Number <span className="text-destructive">*</span>
             </Label>
-            <Input
-              id="accountNumber"
-              value={accountNumber}
-              onChange={(e) => setAccountNumber(e.target.value)}
-              placeholder="Enter account number"
-              className="h-9"
-            />
+            <div className="relative">
+              <Input
+                id="accountNumber"
+                value={accountNumber}
+                onChange={(e) => setAccountNumber(e.target.value)}
+                placeholder="Enter account number (e.g. 132220000060)"
+                className="h-9 pr-9 font-mono text-xs"
+              />
+              <div className="absolute right-2.5 top-2.5 flex items-center">
+                {verifyingAccount ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" title="Verifying in Core Banking..." />
+                ) : accountVerified ? (
+                  <div className="text-emerald-600 dark:text-emerald-400 animate-in zoom-in-50" title="Core Banking Account Verified">
+                    <CheckCircle2 className="h-4 w-4" />
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            {/* Revealed verified account information card (for display only, not saved) */}
+            {accountDetails && (
+              <div className="p-3 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/80 space-y-1.5 animate-in fade-in-50 zoom-in-95 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    Core Banking Account Verified
+                  </span>
+                  {accountDetails.currency && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200">
+                      {accountDetails.currency}
+                    </span>
+                  )}
+                </div>
+                <div className="text-[11px] text-foreground space-y-0.5 pt-1">
+                  <p className="font-semibold text-emerald-950 dark:text-emerald-100">
+                    <span className="text-muted-foreground font-normal">Account Description: </span>
+                    {accountDetails.accountDescrp || accountDetails.descrp || "N/A"}
+                  </p>
+                  {accountDetails.customerName && (
+                    <p className="text-muted-foreground">
+                      Customer Name: <span className="font-medium text-foreground">{accountDetails.customerName}</span>
+                    </p>
+                  )}
+                  {accountDetails.branch && (
+                    <p className="text-muted-foreground">
+                      Branch: <span className="font-medium text-foreground">{accountDetails.branch}</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">

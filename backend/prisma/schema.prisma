@@ -1,0 +1,323 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model account_setups {
+  id             BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  account_name   String    @db.VarChar(255)
+  account_number String    @db.VarChar(255)
+  account_type   String    @db.VarChar(255)
+  status         String    @db.Char(1)
+  posted_by      BigInt
+  created_at     DateTime? @db.Timestamp(0)
+  updated_at     DateTime? @db.Timestamp(0)
+}
+
+model approval_activities {
+  id                 BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  approved_by        String    @db.VarChar(255)
+  comment            String?   @db.VarChar(255)
+  recommended_amount String?   @db.VarChar(255)
+  doc_id             BigInt
+  created_at         DateTime? @default(now()) @db.Timestamp(0)
+  updated_at         DateTime? @default(now()) @db.Timestamp(0)
+  approval_stage     Int
+}
+
+model approver_setups {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id    BigInt
+  branch_id  BigInt
+  doctype_id BigInt
+  status     String    @db.VarChar(255)
+  posted_by  String    @db.VarChar(255)
+  created_at DateTime? @db.Timestamp(0)
+  updated_at DateTime? @db.Timestamp(0)
+}
+
+model approvers {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  employee_id String    @db.VarChar(255)
+  branch      String    @db.VarChar(255)
+  doctype_id  String    @db.VarChar(255)
+  created_at  DateTime? @db.Timestamp(0)
+  updated_at  DateTime? @db.Timestamp(0)
+}
+
+model audits {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  activity   String    @db.VarChar(255)
+  done_by    String    @db.VarChar(255)
+  created_at DateTime? @db.Timestamp(0)
+  updated_at DateTime? @db.Timestamp(0)
+}
+
+model beneficiary_setups {
+  id               BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  beneficiary_name String    @db.VarChar(255)
+  account_number   String    @db.VarChar(255)
+  description      String?   @db.VarChar(255)
+  status           String    @db.Char(1)
+  posted_by        BigInt
+  created_at       DateTime? @db.Timestamp(0)
+  updated_at       DateTime? @db.Timestamp(0)
+}
+
+model cache {
+  key        String @id @db.VarChar(255)
+  value      String @db.MediumText
+  expiration Int
+}
+
+model cache_locks {
+  key        String @id @db.VarChar(255)
+  owner      String @db.VarChar(255)
+  expiration Int
+}
+
+model code_creation_details {
+  id             BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  code_id        String    @db.VarChar(255)
+  description    String    @db.VarChar(255)
+  posted_by      String    @db.VarChar(255)
+  created_at     DateTime? @db.Timestamp(0)
+  updated_at     DateTime? @db.Timestamp(0)
+  status         String    @db.VarChar(255)
+  trans_type     String    @db.VarChar(255)
+  expense_code   String?   @db.VarChar(255)
+  account_desc   String?   @db.VarChar(200)
+  account_number String?   @db.VarChar(200)
+  color_code     String    @db.VarChar(200)
+}
+
+model code_creations {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  code        String    @db.VarChar(255)
+  description String    @db.VarChar(255)
+  posted_by   String    @db.VarChar(255)
+  created_at  DateTime? @db.Timestamp(0)
+  updated_at  DateTime? @db.Timestamp(0)
+}
+
+model doc_approval_setups {
+  id                            BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  doctype_id                    BigInt
+  stage_desc                    String    @db.VarChar(200)
+  approval_stage                String    @db.VarChar(255)
+  number_of_approvers           BigInt
+  number_of_mandatory_approvers BigInt
+  quorum                        String    @db.VarChar(11)
+  approvers                     String    @db.Text
+  details                       String    @db.Text
+  posted_by                     String    @db.VarChar(255)
+  created_at                    DateTime? @db.Timestamp(0)
+  updated_at                    DateTime? @db.Timestamp(0)
+}
+
+model doc_approvers {
+  id             BigInt   @id @default(autoincrement())
+  doctype_id     BigInt
+  approver_id    BigInt
+  is_mandatory   Boolean
+  approval_stage String   @db.VarChar(200)
+  created_at     DateTime @default(now()) @db.Timestamp(0)
+  updated_at     DateTime @default(now()) @db.Timestamp(0)
+}
+
+model document_types {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  name        String    @db.VarChar(255)
+  description String    @db.VarChar(255)
+  created_at  DateTime? @db.Timestamp(0)
+  updated_at  DateTime? @db.Timestamp(0)
+}
+
+model failed_jobs {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid       String   @unique(map: "failed_jobs_uuid_unique") @db.VarChar(255)
+  connection String   @db.Text
+  queue      String   @db.Text
+  payload    String   @db.LongText
+  exception  String   @db.LongText
+  failed_at  DateTime @default(now()) @db.Timestamp(0)
+}
+
+model job_batches {
+  id             String  @id @db.VarChar(255)
+  name           String  @db.VarChar(255)
+  total_jobs     Int
+  pending_jobs   Int
+  failed_jobs    Int
+  failed_job_ids String  @db.LongText
+  options        String? @db.MediumText
+  cancelled_at   Int?
+  created_at     Int
+  finished_at    Int?
+}
+
+model jobs {
+  id           BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  queue        String @db.VarChar(255)
+  payload      String @db.LongText
+  attempts     Int    @db.UnsignedTinyInt
+  reserved_at  Int?   @db.UnsignedInt
+  available_at Int    @db.UnsignedInt
+  created_at   Int    @db.UnsignedInt
+
+  @@index([queue], map: "jobs_queue_index")
+}
+
+model migrations {
+  id        Int    @id @default(autoincrement()) @db.UnsignedInt
+  migration String @db.VarChar(255)
+  batch     Int
+}
+
+model model_has_permissions {
+  permission_id BigInt      @db.UnsignedBigInt
+  model_type    String      @db.VarChar(255)
+  model_id      BigInt      @db.UnsignedBigInt
+  permissions   permissions @relation(fields: [permission_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "model_has_permissions_permission_id_foreign")
+
+  @@id([permission_id, model_id, model_type])
+  @@index([model_id, model_type], map: "model_has_permissions_model_id_model_type_index")
+}
+
+model model_has_roles {
+  role_id    BigInt @db.UnsignedBigInt
+  model_type String @db.VarChar(255)
+  model_id   BigInt @db.UnsignedBigInt
+  roles      roles  @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "model_has_roles_role_id_foreign")
+
+  @@id([role_id, model_id, model_type])
+  @@index([model_id, model_type], map: "model_has_roles_model_id_model_type_index")
+}
+
+model password_reset_tokens {
+  email      String    @id @db.VarChar(255)
+  token      String    @db.VarChar(255)
+  created_at DateTime? @db.Timestamp(0)
+}
+
+model permissions {
+  id                    BigInt                  @id @default(autoincrement()) @db.UnsignedBigInt
+  name                  String                  @db.VarChar(255)
+  guard_name            String                  @db.VarChar(255)
+  created_at            DateTime?               @db.Timestamp(0)
+  updated_at            DateTime?               @db.Timestamp(0)
+  model_has_permissions model_has_permissions[]
+  role_has_permissions  role_has_permissions[]
+
+  @@unique([name, guard_name], map: "permissions_name_guard_name_unique")
+}
+
+model personal_access_tokens {
+  id             BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  tokenable_type String    @db.VarChar(255)
+  tokenable_id   BigInt    @db.UnsignedBigInt
+  name           String    @db.VarChar(255)
+  token          String    @unique(map: "personal_access_tokens_token_unique") @db.VarChar(64)
+  abilities      String?   @db.Text
+  last_used_at   DateTime? @db.Timestamp(0)
+  expires_at     DateTime? @db.Timestamp(0)
+  created_at     DateTime? @db.Timestamp(0)
+  updated_at     DateTime? @db.Timestamp(0)
+
+  @@index([tokenable_type, tokenable_id], map: "personal_access_tokens_tokenable_type_tokenable_id_index")
+}
+
+model request_documents {
+  id                         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  doctype_id                 BigInt
+  branch                     String    @db.VarChar(255)
+  requested_amount           String?   @db.VarChar(255)
+  approved_amount            String?   @db.VarChar(255)
+  customer_no                String?   @db.VarChar(255)
+  customer_desc              String    @db.VarChar(255)
+  details                    String    @db.VarChar(255)
+  doc_id                     String    @db.VarChar(255)
+  batch_no                   String?   @db.VarChar(255)
+  transaction_date           DateTime? @db.Date
+  is_transaction_failed      Boolean
+  is_approved                Boolean   @default(false)
+  posted_by                  String    @db.VarChar(255)
+  status                     String    @default("DRAFT") @db.VarChar(255)
+  approval_stage             String    @default("1") @db.VarChar(255)
+  current_approvers          Int?
+  is_required_approvers_left Boolean   @default(false)
+  decline_reason             String?   @db.VarChar(255)
+  updated_by                 String?   @db.VarChar(255)
+  created_at                 DateTime? @default(now()) @db.Timestamp(0)
+  updated_at                 DateTime? @default(now()) @db.Timestamp(0)
+  stage_updated_at           DateTime  @default(now()) @db.Timestamp(0)
+}
+
+model role_has_permissions {
+  permission_id BigInt      @db.UnsignedBigInt
+  role_id       BigInt      @db.UnsignedBigInt
+  permissions   permissions @relation(fields: [permission_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "role_has_permissions_permission_id_foreign")
+  roles         roles       @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "role_has_permissions_role_id_foreign")
+
+  @@id([permission_id, role_id])
+  @@index([role_id], map: "role_has_permissions_role_id_foreign")
+}
+
+model roles {
+  id                   BigInt                 @id @default(autoincrement()) @db.UnsignedBigInt
+  name                 String                 @db.VarChar(255)
+  guard_name           String                 @db.VarChar(255)
+  created_at           DateTime?              @db.Timestamp(0)
+  updated_at           DateTime?              @db.Timestamp(0)
+  model_has_roles      model_has_roles[]
+  role_has_permissions role_has_permissions[]
+
+  @@unique([name, guard_name], map: "roles_name_guard_name_unique")
+}
+
+model sessions {
+  id            String  @id @db.VarChar(255)
+  user_id       BigInt? @db.UnsignedBigInt
+  ip_address    String? @db.VarChar(45)
+  user_agent    String? @db.Text
+  payload       String  @db.LongText
+  last_activity Int
+
+  @@index([last_activity], map: "sessions_last_activity_index")
+  @@index([user_id], map: "sessions_user_id_index")
+}
+
+model temporary_approvers {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  doctype_id String?   @db.VarChar(255)
+  user_id    BigInt
+  permission String    @db.VarChar(255)
+  status     String    @db.Char(1)
+  posted_by  String    @db.VarChar(255)
+  created_at DateTime? @db.Timestamp(0)
+  updated_at DateTime? @db.Timestamp(0)
+}
+
+model users {
+  id                BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  employee_id       String    @unique(map: "users_employee_id_unique") @db.VarChar(255)
+  first_name        String    @db.VarChar(255)
+  last_name         String    @db.VarChar(255)
+  branch            String?   @db.VarChar(255)
+  email             String    @unique(map: "users_email_unique") @db.VarChar(255)
+  email_verified_at DateTime? @db.Timestamp(0)
+  password          String    @db.VarChar(255)
+  rank              String?   @db.VarChar(255)
+  phone             String    @unique(map: "users_phone_unique") @db.VarChar(255)
+  signature         String?   @unique(map: "users_signature_unique") @db.VarChar(255)
+  status            String    @db.Char(1)
+  remember_token    String?   @db.VarChar(100)
+  posted_by         BigInt
+  created_at        DateTime? @db.Timestamp(0)
+  updated_at        DateTime? @db.Timestamp(0)
+}

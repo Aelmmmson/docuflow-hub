@@ -73,6 +73,7 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
   const [customerNumber, setCustomerNumber] = useState("");
   const [details, setDetails] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [beneficiaries, setBeneficiaries] = useState<any[]>([]);
 
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -81,7 +82,7 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
   // Check if selected document type is transactional
   const isTransactionalDoc = selectedDocType?.trans_type === "1";
 
-  // Fetch document types
+  // Fetch document types & beneficiaries
   useEffect(() => {
     const fetchDocTypes = async () => {
       try {
@@ -101,7 +102,18 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
       }
     };
 
+    const fetchBeneficiaries = async () => {
+      try {
+        const res = await api.get("/get-all-beneficiary-accounts");
+        const list = res.data?.accounts || [];
+        setBeneficiaries(list);
+      } catch (err) {
+        console.warn("Could not load beneficiary accounts:", err);
+      }
+    };
+
     fetchDocTypes();
+    fetchBeneficiaries();
   }, [toast]);
 
   // Apply template
@@ -425,23 +437,31 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Customer Number</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={customerNumber}
-                  onChange={(e) => setCustomerNumber(e.target.value)}
-                  placeholder="Enter customer number"
-                  className="h-9 text-xs"
-                />
-                <Button variant="outline" size="sm" className="h-9 px-3">
-                  <Search className="h-3.5 w-3.5" />
-                </Button>
-              </div>
+              <Label className="text-xs font-medium">Beneficiary Account Number</Label>
+              <Select
+                value={customerNumber}
+                onValueChange={(val) => setCustomerNumber(val)}
+              >
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Select beneficiary account..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {beneficiaries.map((b: any) => {
+                    const acct = String(b.account_number || b.accountNumber || "").trim();
+                    const name = String(b.beneficiary_name || b.name || "Beneficiary").trim();
+                    return (
+                      <SelectItem key={b.id || acct} value={acct}>
+                        {name} ({acct})
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         ) : (
           <div className="text-[10px] text-muted-foreground italic p-2 py-0 bg-muted/20 rounded-md text-center">
-            Amount and Customer Number fields are only available for transactional documents.
+            Amount and Beneficiary Account Number fields are only available for transactional documents.
           </div>
         )}
 
@@ -471,7 +491,7 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
         {/* Action Buttons */}
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={handleClear}>
-            Clearss
+            Clears
           </Button>
           <Button
             onClick={handleSaveDraft}

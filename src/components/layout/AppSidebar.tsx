@@ -1,58 +1,37 @@
-// src/components/AppSidebar.tsx
+// src/components/layout/AppSidebar.tsx
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
-  LayoutDashboard,
+  Home,
   FileInput,
   Settings,
-  FileText,
-  Menu,
-  X,
-  LogOut,
   CheckCircle,
   DollarSign,
+  LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, useRef } from "react";
-import { logout } from "@/lib/auth";
-import { getCurrentUser } from "@/lib/auth";
+import { logout, getCurrentUser } from "@/lib/auth";
 import api from "@/lib/api";
 
-function MenuIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="white"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <rect x="3" y="6" width="8" height="3" rx="1" />
-      <rect x="13" y="6" width="8" height="3" rx="1" />
-      <rect x="3" y="11" width="8" height="3" rx="1" />
-      <rect x="13" y="11" width="8" height="3" rx="1" />
-      <rect x="3" y="16" width="18" height="3" rx="1" />
-    </svg>
-  );
-}
-
-// Base navigation items
+// Base navigation items with Home icon for Dashboard
 const baseNavigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
+  { name: "Dashboard", href: "/", icon: Home },
   { name: "Document Capture", href: "/document-capture", icon: FileInput },
   { name: "Approval", href: "/approval", icon: CheckCircle },
   { name: "Finance Approvals", href: "/finance-approvals", icon: DollarSign },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
-// Scrolling text component
+// Scrolling text component for expanded sidebar mode
 function ScrollingText({
   text,
   className,
-  maxLength = 18
 }: {
   text: string;
   className?: string;
-  maxLength?: number;
 }) {
   const [shouldScroll, setShouldScroll] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
@@ -71,23 +50,16 @@ function ScrollingText({
     if (!shouldScroll) return;
 
     const runCycle = () => {
-      // Start scrolling after initial delay
       setTimeout(() => {
         setIsScrolling(true);
-
-        // Stop scrolling after animation completes
         setTimeout(() => {
           setIsScrolling(false);
-        }, 10000); // 10 second scroll duration
-      }, 1500); // 1.5 second initial delay
+        }, 10000);
+      }, 1500);
     };
 
-    // Run first cycle
     runCycle();
-
-    // Repeat cycle every 13.5 seconds (1.5s delay + 10s scroll + 2s pause)
     const cycleInterval = setInterval(runCycle, 13500);
-
     return () => clearInterval(cycleInterval);
   }, [shouldScroll]);
 
@@ -101,17 +73,12 @@ function ScrollingText({
           className
         )}
         style={{
-          willChange: isScrolling ? 'transform' : 'auto'
+          willChange: isScrolling ? "transform" : "auto",
         }}
       >
         {text}
         {shouldScroll && isScrolling && <span className="inline-block px-8">{text}</span>}
       </div>
-      {shouldScroll && !isScrolling && (
-        <span className={cn("absolute right-0 top-0 bg-gradient-to-l from-sidebar-accent via-sidebar-accent to-transparent pl-4 pr-1 py-1", className)}>
-          ...
-        </span>
-      )}
     </div>
   );
 }
@@ -120,14 +87,33 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
+  
+  // Mobile sidebar state: Default to OPEN on mobile as Canva-style vertical rail
+  const [isMobileOpen, setIsMobileOpen] = useState(true);
+  const [isMobileScreen, setIsMobileScreen] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobileScreen(window.innerWidth < 1024);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const currentUser = getCurrentUser();
+  const firstName = currentUser?.first_name || "";
+  const lastName = currentUser?.last_name || "";
   const displayName = currentUser
-    ? `${currentUser.first_name} ${currentUser.last_name}`
+    ? `${firstName} ${lastName}`.trim()
     : "Guest";
   const displayEmail = currentUser?.email || "—";
   const displayRole = currentUser?.role_name || "—";
+
+  const initials =
+    firstName && lastName
+      ? `${firstName[0]}${lastName[0]}`.toUpperCase()
+      : (displayName[0] || "U").toUpperCase();
 
   const handleLogout = async () => {
     try {
@@ -145,97 +131,124 @@ export function AppSidebar() {
 
     switch (role) {
       case "admin":
-        // Admin: Can see all except Approval and Finance Approvals
-        return baseNavigation.filter(item =>
-          item.name !== "Approval" && item.name !== "Finance Approvals"
+        return baseNavigation.filter(
+          (item) => item.name !== "Approval" && item.name !== "Finance Approvals"
         );
 
       case "approver":
-        // Approver: Only Dashboard and Approval
-        return baseNavigation.filter(item =>
-          item.name === "Dashboard" || item.name === "Approval"
+        return baseNavigation.filter(
+          (item) => item.name === "Dashboard" || item.name === "Approval"
         );
 
       case "originator":
-        // Originator: Only Dashboard and Document Capture
-        return baseNavigation.filter(item =>
-          item.name === "Dashboard" || item.name === "Document Capture"
+        return baseNavigation.filter(
+          (item) => item.name === "Dashboard" || item.name === "Document Capture"
         );
 
       case "finance":
-        // Finance: Only Dashboard and Finance Approvals
-        return baseNavigation.filter(item =>
-          item.name === "Dashboard" || item.name === "Finance Approvals"
+        return baseNavigation.filter(
+          (item) => item.name === "Dashboard" || item.name === "Finance Approvals"
         );
 
       default:
-        // Default: Show Dashboard only for unknown roles
-        return baseNavigation.filter(item => item.name === "Dashboard");
+        return baseNavigation.filter((item) => item.name === "Dashboard");
     }
   };
 
   const navItems = getFilteredNavigation();
 
+  // Effective compact mode: Either desktop is collapsed OR on mobile screen where rail mode applies
+  const isCompactMode = isMobileScreen || isCollapsed;
+
   return (
     <>
-      {/* Mobile menu button */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="fixed top-3 left-3 z-[110] lg:hidden h-9 w-9"
-        onClick={() => setIsMobileOpen(!isMobileOpen)}
-      >
-        {isMobileOpen ? (
-          <X className="h-5 w-5" />
-        ) : (
-          <Menu className="h-5 w-5" />
-        )}
-      </Button>
+      {/* Mobile Header Toggle Icon (Top Left floating button when sidebar is collapsed on mobile) */}
+      {isMobileScreen && !isMobileOpen && (
+        <Button
+          variant="outline"
+          size="icon"
+          className="fixed top-3 left-3 z-[110] lg:hidden h-10 w-10 rounded-xl bg-card border-border shadow-md text-foreground hover:bg-accent"
+          onClick={() => setIsMobileOpen(true)}
+          title="Open Navigation"
+        >
+          <PanelLeftOpen className="h-5 w-5 text-primary" />
+        </Button>
+      )}
 
-      {/* Overlay */}
-      {isMobileOpen && (
+      {/* Mobile Backdrop Overlay (Allows tapping outside to collapse on small screens) */}
+      {isMobileScreen && isMobileOpen && (
         <div
-          className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-[95] bg-black/30 backdrop-blur-[2px] lg:hidden animate-in fade-in-50"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar Container: Guarantee overflow-x-hidden so no horizontal scrolling occurs */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-[100] flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:z-auto rounded-r-2xl",
-          isCollapsed ? "w-20" : "w-64",
-          isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-[100] flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:z-auto shadow-xl lg:shadow-none overflow-x-hidden",
+          // Width: Compact Canva style (w-20) on mobile & desktop-collapsed, or Full (w-64) on desktop
+          isCompactMode ? "w-20" : "w-64",
+          // Visibility on Mobile: Open by default, translate off-screen when explicitly collapsed by user
+          isMobileScreen
+            ? isMobileOpen
+              ? "translate-x-0"
+              : "-translate-x-full"
+            : "translate-x-0"
         )}
       >
-        {/* Logo with Menu Toggle */}
-        <div className={cn("p-4", isCollapsed && "px-2")}>
-          <div className={cn("flex items-center gap-3 pt-3", isCollapsed && "flex-col gap-2")}>
-            <button
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center shadow-lg hover:shadow-xl transition-shadow flex-shrink-0"
-            >
+        {/* Header / Brand & Toggle Button */}
+        <div className={cn("p-4 flex items-center justify-between", isCompactMode && "px-2 py-4 flex-col gap-3")}>
+          <div className={cn("flex items-center gap-3", isCompactMode && "flex-col gap-2")}>
+            {/* Clean Logo Container - White background preserved in both Light and Dark mode */}
+            <div className="w-10 h-10 rounded-2xl bg-white border border-slate-200/80 flex items-center justify-center shadow-sm flex-shrink-0">
               <img
                 src="/usg-logo-O.png"
-                alt="Fallback background"
-                className="inset-0 w-8 h-8 object-cover"
+                alt="Logo"
+                className="w-8 h-8 object-contain"
               />
-            </button>
-            {!isCollapsed && (
+            </div>
+            {!isCompactMode && (
               <div className="flex flex-col min-w-0">
-                <span className="text-base font-bold text-sidebar-foreground">
+                <span className="text-base font-extrabold text-sidebar-foreground tracking-tight">
                   xDMS
                 </span>
-                <span className="text-2xs text-sidebar-foreground/60 truncate">
+                <span className="text-[10px] text-sidebar-foreground/60 font-medium truncate">
                   Document Manager
                 </span>
               </div>
             )}
           </div>
+
+          {/* Desktop Toggle Button */}
+          {!isMobileScreen && (
+            <button
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="p-1.5 rounded-lg text-sidebar-foreground/60 hover:text-foreground hover:bg-sidebar-accent transition-colors"
+              title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            >
+              {isCollapsed ? (
+                <PanelLeftOpen className="w-5 h-5 text-primary" />
+              ) : (
+                <PanelLeftClose className="w-5 h-5" />
+              )}
+            </button>
+          )}
+
+          {/* Mobile Collapse Button at top of Canva rail */}
+          {isMobileScreen && (
+            <button
+              onClick={() => setIsMobileOpen(false)}
+              className="p-1.5 rounded-lg text-sidebar-foreground/60 hover:text-foreground hover:bg-sidebar-accent transition-colors"
+              title="Close Navigation"
+            >
+              <PanelLeftClose className="w-5 h-5 text-primary" />
+            </button>
+          )}
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
+        {/* Navigation Items (Never horizontally scrolls; breaks long titles cleanly) */}
+        <nav className={cn("flex-1 space-y-2 overflow-y-auto overflow-x-hidden pt-2", isCompactMode ? "px-2" : "px-3")}>
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.href;
@@ -243,22 +256,33 @@ export function AppSidebar() {
               <NavLink
                 key={item.name}
                 to={item.href}
-                onClick={() => setIsMobileOpen(false)}
                 className={cn(
-                  "w-full flex items-center gap-3 text-xs font-medium transition-all duration-200",
+                  "w-full flex transition-all duration-200 group relative overflow-hidden",
+                  isCompactMode
+                    ? "flex-col items-center justify-center py-2.5 px-1 gap-1.5 rounded-2xl text-center"
+                    : "flex-row items-center gap-3 rounded-xl px-4 py-3 text-left",
                   isActive
-                    ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 shadow-sm"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent",
-                  isCollapsed
-                    ? "flex-col justify-center rounded-lg p-2 gap-1"
-                    : "rounded-xl px-4 py-3",
+                    ? "bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 font-bold shadow-sm ring-1 ring-blue-300/60 dark:ring-blue-800/60"
+                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-blue-600 dark:hover:text-blue-400 font-medium"
                 )}
               >
-                <Icon className={cn("flex-shrink-0", isCollapsed ? "h-5 w-5" : "h-4 w-4")} />
-                <span className={cn(
-                  "text-center leading-tight",
-                  isCollapsed && "text-[10px] px-1"
-                )}>
+                <Icon
+                  className={cn(
+                    "flex-shrink-0 transition-all duration-200 group-hover:scale-110",
+                    isCompactMode ? "h-5 w-5" : "h-4 w-4",
+                    isActive
+                      ? "text-blue-600 dark:text-blue-400"
+                      : "text-sidebar-foreground/75 group-hover:text-blue-600 dark:group-hover:text-blue-400"
+                  )}
+                />
+                <span
+                  className={cn(
+                    "leading-tight break-words whitespace-normal max-w-full",
+                    isCompactMode
+                      ? "text-[10px] px-0.5 text-center tracking-tight"
+                      : "text-xs"
+                  )}
+                >
                   {item.name}
                 </span>
               </NavLink>
@@ -266,63 +290,65 @@ export function AppSidebar() {
           })}
         </nav>
 
-        {/* Bottom Section */}
-        <div className={cn("p-3", isCollapsed && "px-2")}>
-          {/* User Profile - Full */}
-          {!isCollapsed && (
-            <div className="pt-2 border-t border-sidebar-border">
-              <div className="flex items-center gap-3 rounded-xl bg-sidebar-accent p-3">
-                <div className="relative flex-shrink-0">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-sm font-bold shadow-lg">
-                    {(displayName.split(" ").map(n => n[0]).join("") || "?").toUpperCase()}
-                  </div>
-                  <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-sidebar" />
+        {/* Bottom Section (Canva Style Profile Circle Badge) */}
+        <div className={cn("p-3 overflow-x-hidden", isCompactMode && "px-2 py-4")}>
+          {isCompactMode ? (
+            /* Canva Style Vertical Profile Badge */
+            <div className="pt-3 border-t border-sidebar-border flex flex-col items-center gap-3">
+              <div
+                onClick={() => navigate("/profile?tab=overview")}
+                className="relative cursor-pointer group"
+                title="Account Profile"
+              >
+                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white text-xs font-extrabold flex items-center justify-center shadow-md group-hover:scale-105 transition-transform ring-2 ring-blue-500/20">
+                  {initials}
                 </div>
-                <div className="flex-1 min-w-0">
-                  {/* Name with scrolling - Reduced spacing */}
+                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-sidebar" />
+              </div>
+
+              <button
+                onClick={handleLogout}
+                className="h-8 w-8 rounded-xl flex items-center justify-center text-sidebar-foreground/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 transition-colors"
+                title="Log out"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            /* Expanded Profile Layout */
+            <div className="pt-2 border-t border-sidebar-border">
+              <div className="flex items-center gap-3 rounded-xl bg-sidebar-accent p-3 hover:bg-sidebar-accent/80 transition-colors cursor-pointer group">
+                <div
+                  onClick={() => navigate("/profile?tab=overview")}
+                  className="relative flex-shrink-0"
+                  title="View My Profile"
+                >
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white text-xs font-extrabold shadow-md group-hover:scale-105 transition-transform">
+                    {initials}
+                  </div>
+                  <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-sidebar" />
+                </div>
+                <div
+                  onClick={() => navigate("/profile?tab=overview")}
+                  className="flex-1 min-w-0"
+                  title="View My Profile"
+                >
                   <ScrollingText
                     text={displayName}
-                    className="text-xs font-semibold text-sidebar-foreground capitalize"
-                    maxLength={18}
+                    className="text-xs font-semibold text-sidebar-foreground capitalize group-hover:text-blue-600 dark:group-hover:text-blue-400"
                   />
-
-                  {/* Email with scrolling - Tight spacing */}
                   <ScrollingText
                     text={displayEmail}
-                    className="text-2xs text-sidebar-foreground/60"
-                    maxLength={22}
+                    className="text-[11px] text-sidebar-foreground/60"
                   />
-
-                  {/* Role – static, no scroll */}
-                  <p className="text-2xs text-sidebar-foreground/60 truncate capitalize">
+                  <p className="text-[10px] text-sidebar-foreground/60 truncate capitalize">
                     {displayRole}
                   </p>
                 </div>
 
                 <button
                   onClick={handleLogout}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors flex-shrink-0"
-                  title="Logout"
-                >
-                  <LogOut className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Collapsed User Avatar */}
-          {isCollapsed && (
-            <div className="pt-2 border-t border-sidebar-border">
-              <div className="flex flex-col items-center gap-2">
-                <div className="relative">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-sm font-bold shadow-lg cursor-pointer">
-                    {(displayName.split(" ").map(n => n[0]).join("") || "?").toUpperCase()}
-                  </div>
-                  <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-sidebar" />
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground/60 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors flex-shrink-0"
                   title="Logout"
                 >
                   <LogOut className="h-4 w-4" />
@@ -332,29 +358,6 @@ export function AppSidebar() {
           )}
         </div>
       </aside>
-
-      {/* Add styles for marquee animation */}
-      <style>{`
-        @keyframes marquee {
-          0% {
-            transform: translate3d(0, 0, 0);
-          }
-          100% {
-            transform: translate3d(-50%, 0, 0);
-          }
-        }
-
-        .animate-marquee-scroll {
-          animation: marquee 10s linear forwards;
-          backface-visibility: hidden;
-          -webkit-font-smoothing: antialiased;
-          -moz-osx-font-smoothing: grayscale;
-        }
-
-        .animate-marquee-scroll:hover {
-          animation-play-state: paused;
-        }
-      `}</style>
     </>
   );
 }
