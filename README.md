@@ -19,12 +19,14 @@
 ## Technology Stack
 
 ### Frontend
+
 - **Framework**: React 18, Vite, TypeScript
 - **Styling**: TailwindCSS, Shadcn UI Components, Lucide Icons
 - **PDF Engine**: Client-side `pdf-lib` for dynamic stamp generation and overlay
 - **State & Routing**: React Router DOM v6, React Query, React Context
 
 ### Backend
+
 - **Runtime**: Node.js & Express REST API
 - **Database**: MySQL / MariaDB (Raw SQL & Prisma ORM support)
 - **HTTP Gateway**: Axios (Core Banking integration with `x-api-key`, `x-api-secret`, `X-FORWARDED-FOR` headers)
@@ -35,13 +37,13 @@
 ## Core API Architecture
 
 ### Base URL
-```
-http://localhost:5000/v1/api/dms
-```
+
+<http://localhost:5000/v1/api/dms>
 
 ### Key API Routes
+
 | Module | Method | Endpoint | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **Auth** | `POST` | `/user/login` | User authentication & JWT issuance |
 | **Auth** | `POST` | `/user/xauth-login` | SSO Callback Authentication |
 | **Auth** | `GET` | `/user/logout` | Session destruction |
@@ -67,10 +69,12 @@ http://localhost:5000/v1/api/dms
 ## Setup & Local Development
 
 ### 1. Prerequisites
+
 - Node.js v18+
 - MySQL / MariaDB Server
 
 ### 2. Environment Configuration (`backend/.env`)
+
 ```env
 PORT=5000
 DATABASE_URL=mysql://user:password@localhost:3306/docuflow_db
@@ -82,11 +86,13 @@ CORE_BANKING_FORWARDED_FOR=10.203.18.114
 ```
 
 ### 3. Frontend Configuration (`.env`)
+
 ```env
 VITE_API_BASE_URL=http://localhost:5000/v1/api/dms
 ```
 
 ### 4. Running the Backend
+
 ```bash
 cd backend
 npm install
@@ -94,12 +100,14 @@ npm run start
 ```
 
 ### 5. Running the Frontend
+
 ```bash
 npm install
 npm run dev
 ```
 
 ### 6. Production Build
+
 ```bash
 npm run build
 ```
