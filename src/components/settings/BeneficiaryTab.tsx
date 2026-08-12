@@ -59,6 +59,9 @@ export function BeneficiaryTab() {
   const { toast } = useToast();
   const currentUser = getCurrentUser();
 
+  // Max characters allowed for the description field
+  const MAX_DESCRIPTION_LENGTH = 250;
+
   const [beneficiaries, setBeneficiaries] = useState<DisplayBeneficiary[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

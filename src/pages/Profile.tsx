@@ -62,6 +62,17 @@ export default function Profile() {
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
+  // Approver status — only approvers may manage their own signature
+  const [isApprover, setIsApprover] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!currentUser?.user_id) return;
+    api
+      .get(`/user/is-approver/${currentUser.user_id}`)
+      .then((res) => setIsApprover(res.data?.isApprover === true))
+      .catch(() => setIsApprover(false)); // default to false on error
+  }, [currentUser?.user_id]);
+
   const handleSignatureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -230,10 +241,17 @@ export default function Profile() {
             <User className="h-3.5 w-3.5" />
             Overview
           </TabsTrigger>
-          <TabsTrigger value="signature" className="text-xs flex items-center gap-1.5">
-            <FileSignature className="h-3.5 w-3.5" />
-            Signature
-          </TabsTrigger>
+          {/* Signature tab is ONLY visible to assigned approvers — hidden for non-approvers and admins not in doc_approvers */}
+          {isApprover === true && (
+            <TabsTrigger value="signature" className="text-xs flex items-center gap-1.5">
+              <FileSignature className="h-3.5 w-3.5" />
+              Signature
+            </TabsTrigger>
+          )}
+          {/* When user is not an approver, fill the grid evenly */}
+          {isApprover !== true && (
+            <div aria-hidden="true" />
+          )}
           <TabsTrigger value="security" className="text-xs flex items-center gap-1.5">
             <Lock className="h-3.5 w-3.5" />
             Security
@@ -377,6 +395,19 @@ export default function Profile() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Access guard: only approvers may manage their signature */}
+              {isApprover !== true ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-10 text-center text-muted-foreground">
+                  <Shield className="h-10 w-10 text-muted-foreground/40" />
+                  <p className="text-sm font-semibold">Signature Management Restricted</p>
+                  <p className="text-xs max-w-sm">
+                    Only users assigned as approvers in the system are permitted to upload and manage a digital signature.
+                    Please contact your system administrator if you believe this is an error.
+                  </p>
+                </div>
+              ) : (
+                <>
+
               {/* Signature Display Box */}
               <div className="rounded-xl border border-border bg-slate-50 dark:bg-slate-900/50 p-6 flex flex-col items-center justify-center min-h-[160px] relative">
                 <div className="absolute top-3 right-3">
@@ -480,6 +511,8 @@ export default function Profile() {
                   Accepted formats: PNG, JPG, SVG. Signatures are automatically formatted for clean PDF authorization stamping.
                 </p>
               </div>
+              </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

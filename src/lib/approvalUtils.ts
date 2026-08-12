@@ -80,7 +80,14 @@ export function computeAwaitingApprovers(
       });
 
       const quorum = Number(stageItem.quorum || 1);
-      const hasMandatoryApprover = stageItem.approvers.some((appr: any) => appr.isMandatory);
+
+      // Count how many mandatory approvers are configured in this stage
+      const mandatoryCount = stageItem.approvers.filter((appr: any) => appr.isMandatory).length;
+
+      // If mandatory approvers fill all quorum slots, optional approvers are irrelevant:
+      // they cannot contribute toward meeting the quorum requirement.
+      // This generalises the quorum===1 rule to any quorum value (2, 3, 4, …).
+      const allQuorumSlotsMandatory = mandatoryCount >= quorum;
 
       stageItem.approvers.forEach((appr: any) => {
         const hasSigned = comments.some(
@@ -88,10 +95,14 @@ export function computeAwaitingApprovers(
         );
 
         if (!hasSigned) {
-          // If quorum is 1 and a mandatory approver exists, optional approvers are excluded
-          const excludeOptionalBecauseQuorumOne = quorum === 1 && hasMandatoryApprover && !appr.isMandatory;
+          // Exclude an optional approver if:
+          //  a) all quorum slots are already covered by mandatory approvers, OR
+          //  b) at least one optional has already approved in this stage (so more optionals aren't needed)
+          const excludeOptional =
+            !appr.isMandatory &&
+            (allQuorumSlotsMandatory || optionalApproved);
 
-          if (!excludeOptionalBecauseQuorumOne && (appr.isMandatory || !optionalApproved)) {
+          if (!excludeOptional && (appr.isMandatory || !optionalApproved)) {
             awaitingApprovers.push({
               name: appr.name,
               role: `Stage ${stageNum} ${appr.isMandatory ? "Mandatory" : "Optional"} Approver`,

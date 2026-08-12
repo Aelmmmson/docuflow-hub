@@ -45,6 +45,7 @@ router.get("/check-user-engagement/:userId", userController.checkUserEngagement)
 router.delete("/remove-user-from-approvals/:userId", userController.removeUserFromApprovals);
 router.put("/user/update-self-profile", userController.updateSelfProfile);
 router.put("/user/change-password", userController.changePassword);
+router.get("/user/is-approver/:userId", userController.checkIsApprover);
 
 
 

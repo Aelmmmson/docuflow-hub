@@ -594,6 +594,26 @@ const updateSelfProfile = async (req, res) => {
 			return res.status(400).json({ result: "User ID is required", code: "400" });
 		}
 
+		// If a signature is being submitted, verify the user is an assigned approver
+		if (signature !== undefined && signature !== null && signature !== "") {
+			try {
+				const approverCheck = await helper.selectRecordsWithQuery(
+					`SELECT COUNT(*) AS cnt FROM doc_approvers WHERE approver_id = ?`,
+					[userId]
+				);
+				const approverCount = approverCheck?.data?.[0]?.cnt || 0;
+				if (parseInt(approverCount) === 0) {
+					return res.status(403).json({
+						result: "Only assigned approvers are permitted to manage a signature.",
+						code: "403"
+					});
+				}
+			} catch (approverCheckErr) {
+				console.error("[SIGNATURE GUARD] Failed approver check:", approverCheckErr);
+				// Fail-safe: if DB check fails, do not block the update
+			}
+		}
+
 		const data = {};
 		if (first_name !== undefined && first_name !== null) data.first_name = first_name;
 		if (last_name !== undefined && last_name !== null) data.last_name = last_name;
@@ -860,6 +880,29 @@ const removeUserFromApprovals = async (req, res) => {
   }
 };
 
+/**
+ * Checks if a given user (by userId) is assigned as an approver in any doc_approvers setup.
+ * Returns { isApprover: true } if they are, { isApprover: false } otherwise.
+ */
+const checkIsApprover = async (req, res) => {
+	try {
+		const { userId } = req.params;
+		if (!userId) {
+			return res.status(400).json({ result: "User ID is required", code: "400" });
+		}
+
+		const result = await helper.selectRecordsWithQuery(
+			`SELECT COUNT(*) AS cnt FROM doc_approvers WHERE approver_id = ?`,
+			[userId]
+		);
+		const count = parseInt(result?.data?.[0]?.cnt || 0);
+		return res.status(200).json({ isApprover: count > 0, code: "200" });
+	} catch (error) {
+		console.error("Error in checkIsApprover:", error);
+		return res.status(500).json({ result: "Failed to check approver status", code: "500" });
+	}
+};
+
 module.exports = {
 	register,
 	login,
@@ -873,5 +916,6 @@ module.exports = {
 	changePassword,
 	forgotPassword,
 	checkUserEngagement,
-	removeUserFromApprovals
+	removeUserFromApprovals,
+	checkIsApprover
 };
