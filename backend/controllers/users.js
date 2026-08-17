@@ -423,32 +423,62 @@ const updateUser = async(req,res) =>{
 				...(signature !== undefined && signature !== null && signature !== "" ? { signature } : {})
 			};
 
-			let updateUser = await helper.dynamicUpdateWithId(usersCollection, data, req.params.userId);
+			let updateUser;
+			try {
+				updateUser = await helper.dynamicUpdateWithId(usersCollection, data, req.params.userId);
+			} catch (updateErr) {
+				const errMsg = String(updateErr?.message || updateErr?.error?.message || updateErr || "");
+				if (errMsg.includes("users_signature_unique") || errMsg.includes("signature")) {
+					return res.status(409).json({
+						result: "This signature image is already registered for another user. Please upload a unique signature image.",
+						code: "409"
+					});
+				}
+				if (errMsg.includes("users_phone_unique") || errMsg.includes("phone")) {
+					return res.status(409).json({
+						result: "This phone number is already registered for another user.",
+						code: "409"
+					});
+				}
+				if (errMsg.includes("users_email_unique") || errMsg.includes("email")) {
+					return res.status(409).json({
+						result: "This email address is already registered for another user.",
+						code: "409"
+					});
+				}
+				if (errMsg.includes("users_employee_id_unique")) {
+					return res.status(409).json({
+						result: "This employee ID is already registered for another user.",
+						code: "409"
+					});
+				}
+				return res.status(400).json({ result: "Failed to update user: " + (updateErr?.message || "Database update failed"), code: "400" });
+			}
 
 			if (updateUser.status === "error") {
 				const errMsg = String(updateUser.message || "");
 				if (errMsg.includes("users_signature_unique") || errMsg.includes("signature")) {
-					return res.status(400).json({
+					return res.status(409).json({
 						result: "This signature image is already registered for another user. Please upload a unique signature image.",
-						code: "400"
+						code: "409"
 					});
 				}
 				if (errMsg.includes("users_phone_unique") || errMsg.includes("phone")) {
-					return res.status(400).json({
+					return res.status(409).json({
 						result: "This phone number is already registered for another user.",
-						code: "400"
+						code: "409"
 					});
 				}
 				if (errMsg.includes("users_email_unique") || errMsg.includes("email")) {
-					return res.status(400).json({
+					return res.status(409).json({
 						result: "This email address is already registered for another user.",
-						code: "400"
+						code: "409"
 					});
 				}
 				if (errMsg.includes("users_employee_id_unique")) {
-					return res.status(400).json({
+					return res.status(409).json({
 						result: "This employee ID is already registered for another user.",
-						code: "400"
+						code: "409"
 					});
 				}
 				console.log("Error updating user:", updateUser.message);
@@ -468,7 +498,7 @@ const updateUser = async(req,res) =>{
 						"model_type": "App\\Models\\User"
 					};
 
-					const roleUpdate = await helper.dynamicUpdateWithId("model_has_roles", roleData, req.params.userId, "model_id");
+					const roleUpdate = await helper.dynamicUpdateWithId("model_has_roles", roleData, req.params.userId, "model_id").catch(() => ({ status: "success" }));
 
 					if (roleUpdate.status === "success" || roleUpdate.message?.includes("No records updated")) {
 						return res.status(200).json({ result: "User updated successfully", code: "200" });
@@ -488,7 +518,32 @@ const updateUser = async(req,res) =>{
 
 	} catch(error) {
 		console.error("Error updating user", error);
-		return res.status(500).json({ result: "An error occurred, see logs for details", code: "500" });
+		const errMsg = String(error?.message || error?.error?.message || error || "");
+		if (errMsg.includes("users_signature_unique") || errMsg.includes("signature")) {
+			return res.status(409).json({
+				result: "This signature image is already registered for another user. Please upload a unique signature image.",
+				code: "409"
+			});
+		}
+		if (errMsg.includes("users_phone_unique") || errMsg.includes("phone")) {
+			return res.status(409).json({
+				result: "This phone number is already registered for another user.",
+				code: "409"
+			});
+		}
+		if (errMsg.includes("users_email_unique") || errMsg.includes("email")) {
+			return res.status(409).json({
+				result: "This email address is already registered for another user.",
+				code: "409"
+			});
+		}
+		if (errMsg.includes("users_employee_id_unique")) {
+			return res.status(409).json({
+				result: "This employee ID is already registered for another user.",
+				code: "409"
+			});
+		}
+		return res.status(500).json({ result: "An error occurred updating user: " + (error?.message || "Internal server error"), code: "500" });
 	}
 };
 
@@ -625,13 +680,37 @@ const updateSelfProfile = async (req, res) => {
 			try {
 				updateUser = await helper.dynamicUpdateWithId(usersCollection, data, userId);
 			} catch (dbErr) {
-				console.warn("DB update failed, attempting column subset update:", dbErr);
+				console.warn("DB update failed:", dbErr);
+				const errMsg = String(dbErr?.message || dbErr?.error?.message || dbErr || "");
+				if (errMsg.includes("users_signature_unique") || errMsg.includes("signature")) {
+					return res.status(409).json({
+						result: "This signature image is already registered for another user. Please upload a unique signature image.",
+						code: "409"
+					});
+				}
+				if (errMsg.includes("users_email_unique") || errMsg.includes("email")) {
+					return res.status(409).json({
+						result: "This email address is already registered for another user.",
+						code: "409"
+					});
+				}
 				// Fallback: update only first_name, last_name, signature
 				const safeData = {};
 				if (first_name) safeData.first_name = first_name;
 				if (last_name) safeData.last_name = last_name;
 				if (signature) safeData.signature = signature;
-				updateUser = await helper.dynamicUpdateWithId(usersCollection, safeData, userId);
+				try {
+					updateUser = await helper.dynamicUpdateWithId(usersCollection, safeData, userId);
+				} catch (safeErr) {
+					const safeErrMsg = String(safeErr?.message || safeErr?.error?.message || safeErr || "");
+					if (safeErrMsg.includes("users_signature_unique") || safeErrMsg.includes("signature")) {
+						return res.status(409).json({
+							result: "This signature image is already registered for another user. Please upload a unique signature image.",
+							code: "409"
+						});
+					}
+					return res.status(400).json({ result: "Failed to update profile: " + (safeErr?.message || "Database update failed"), code: "400" });
+				}
 			}
 		}
 
@@ -655,7 +734,14 @@ const updateSelfProfile = async (req, res) => {
 		}
 	} catch (error) {
 		console.error("Error updating profile:", error);
-		return res.status(500).json({ result: "An error occurred updating profile: " + (error.message || ""), code: "500" });
+		const errMsg = String(error?.message || error?.error?.message || error || "");
+		if (errMsg.includes("users_signature_unique") || errMsg.includes("signature")) {
+			return res.status(409).json({
+				result: "This signature image is already registered for another user. Please upload a unique signature image.",
+				code: "409"
+			});
+		}
+		return res.status(500).json({ result: "An error occurred updating profile: " + (error?.message || ""), code: "500" });
 	}
 };
 

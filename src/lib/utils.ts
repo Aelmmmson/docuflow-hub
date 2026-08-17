@@ -28,7 +28,11 @@ export function getErrorMessage(err: unknown, fallback: string = "An unexpected 
     const axiosErr = err as {
       code?: string;
       message?: string;
-      response?: { data?: { result?: string; message?: string; error?: string } };
+      response?: {
+        status?: number;
+        statusText?: string;
+        data?: { result?: string; message?: string; error?: string; details?: string };
+      };
     };
 
     // Check specifically for global network connection issues
@@ -36,14 +40,62 @@ export function getErrorMessage(err: unknown, fallback: string = "An unexpected 
       return "Network error: Connection to the server failed. Please check your internet connection.";
     }
 
-    return axiosErr.response?.data?.result ||
+    // Check for HTTP 413 Payload Too Large
+    if (axiosErr.response?.status === 413) {
+      return "The uploaded signature image or file size is too large for the server. Please select a smaller image file (under 2MB).";
+    }
+
+    // Extract message from response data
+    const serverMessage =
+      axiosErr.response?.data?.result ||
       axiosErr.response?.data?.message ||
       axiosErr.response?.data?.error ||
-      (err instanceof Error ? err.message : fallback);
+      axiosErr.response?.data?.details;
+
+    if (serverMessage && typeof serverMessage === "string") {
+      const lower = serverMessage.toLowerCase();
+
+      // Check if server message contains duplicate entry or signature unique error
+      if (lower.includes("users_signature_unique") || (lower.includes("duplicate entry") && lower.includes("signature")) || lower.includes("already registered for another user")) {
+        return "This signature image is already registered for another user. Please upload a unique signature image.";
+      }
+      if (lower.includes("users_email_unique") || (lower.includes("duplicate entry") && lower.includes("email"))) {
+        return "This email address is already registered for another user.";
+      }
+      if (lower.includes("users_phone_unique") || (lower.includes("duplicate entry") && lower.includes("phone"))) {
+        return "This phone number is already registered for another user.";
+      }
+      if (lower.includes("users_employee_id_unique") || (lower.includes("duplicate entry") && lower.includes("employee"))) {
+        return "This Staff ID / Employee ID is already registered for another user.";
+      }
+
+      // Replace generic / unhelpful internal server error strings with user-friendly guidance
+      if (lower.includes("internal server error") || lower.includes("see logs for details")) {
+        return "A server error occurred while processing your request. If uploading a signature image, please ensure the image is unique to this user and under 2MB.";
+      }
+
+      return serverMessage;
+    }
+
+    // Status-code fallback checks
+    if (axiosErr.response?.status === 409) {
+      return "This record or signature image is already registered for another user. Please upload a unique signature image.";
+    }
+
+    if (axiosErr.response?.status === 500) {
+      return "Server error (500): Failed to save. If you are uploading a signature image, please verify it is under 2MB and unique to this user.";
+    }
+
+    if (axiosErr.response?.status === 403) {
+      return "Permission denied: You are not authorized to perform this action.";
+    }
   }
 
   // Handle standard Error objects
   if (err instanceof Error) {
+    if (err.message.includes("413")) {
+      return "The uploaded file size is too large. Please select a smaller file (under 2MB).";
+    }
     return err.message;
   }
 

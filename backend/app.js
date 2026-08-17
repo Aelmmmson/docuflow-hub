@@ -17,8 +17,8 @@ const app = express(); //create express app
 const port = process.env.PORT || 8088; //port for serve
 app.use(credentials);
 app.use(cors(corsOptions));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ limit: "10mb", extended: false }));
 app.use(cookieParser());
 
 //base route for the app

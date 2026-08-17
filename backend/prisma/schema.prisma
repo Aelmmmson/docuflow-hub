@@ -314,7 +314,7 @@ model users {
   password          String    @db.VarChar(255)
   rank              String?   @db.VarChar(255)
   phone             String    @unique(map: "users_phone_unique") @db.VarChar(255)
-  signature         String?   @unique(map: "users_signature_unique") @db.VarChar(255)
+  signature         String?   @unique(map: "users_signature_unique") @db.LongText
   status            String    @db.Char(1)
   remember_token    String?   @db.VarChar(100)
   posted_by         BigInt

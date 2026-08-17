@@ -186,6 +186,15 @@ export function UsersTab() {
       return;
     }
 
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "The signature image size exceeds 2MB. Please upload a smaller image file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
       setSignature(reader.result as string);

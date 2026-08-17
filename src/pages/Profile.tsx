@@ -12,6 +12,8 @@ import { Eye, EyeOff, User, Lock, FileSignature, Upload, Save, CheckCircle2, Edi
 import api from "@/lib/api";
 import { ensurePngSignatureBase64 } from "@/lib/documentStamper";
 
+import { getErrorMessage } from "@/lib/utils";
+
 export default function Profile() {
   const { toast } = useToast();
   const currentUser = getCurrentUser();
@@ -86,6 +88,15 @@ export default function Profile() {
       return;
     }
 
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "The signature image size exceeds 2MB. Please upload a smaller image file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSelectedSigFileName(file.name);
 
     const reader = new FileReader();
@@ -147,7 +158,7 @@ export default function Profile() {
     } catch (err: any) {
       toast({
         title: "Error",
-        description: err.response?.data?.result || "Failed to update profile",
+        description: getErrorMessage(err, "Failed to update profile."),
         variant: "destructive",
       });
     } finally {
