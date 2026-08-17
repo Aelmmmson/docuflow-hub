@@ -38,11 +38,8 @@ export function computeAwaitingApprovers(
 
   // Once a document is declined/rejected, no approver can perform any action
   const isDeclined =
-    (documentStatus && (documentStatus.toUpperCase().includes("REJECT") || documentStatus.toUpperCase().includes("DECLIN"))) ||
-    comments.some((c: any) => {
-      const act = String(c.action || c.status || "").toUpperCase();
-      return act.includes("REJECT") || act.includes("DECLIN");
-    });
+    !!documentStatus &&
+    (documentStatus.toUpperCase().includes("REJECT") || documentStatus.toUpperCase().includes("DECLIN"));
 
   if (isDeclined) return [];
 

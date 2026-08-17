@@ -669,12 +669,26 @@ export function ApprovalSetupTab() {
                     Mandatory Approvers <span className="text-muted-foreground">(optional)</span>
                   </Label>
 
-                  {stages[currentStep - 1].mandatoryApprovers.length >= stages[currentStep - 1].quorum && (
+                  {stages[currentStep - 1].quorum === stages[currentStep - 1].approvers.length && stages[currentStep - 1].approvers.length > 0 && (
+                    <Alert className="py-2 border-blue-200 bg-blue-50/50 text-blue-900 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+                      <AlertDescription className="text-xs">
+                        Quorum equals total assigned approvers. Everyone in the group must approve, so mandatory flags are redundant.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {stages[currentStep - 1].mandatoryApprovers.length === stages[currentStep - 1].quorum && stages[currentStep - 1].approvers.length > stages[currentStep - 1].quorum && (
+                    <Alert className="py-2 border-amber-200 bg-amber-50/50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                      <AlertDescription className="text-xs">
+                        ⚠️ Mandatory approvers satisfy the stage quorum. Additional optional approvers added to this stage will not be able to participate.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {stages[currentStep - 1].mandatoryApprovers.length > stages[currentStep - 1].quorum && (
                     <Alert variant="destructive" className="py-2">
                       <AlertDescription className="text-xs">
                         Mandatory approvers cannot exceed quorum ({stages[currentStep - 1].quorum}).
-                        {stages[currentStep - 1].mandatoryApprovers.length === stages[currentStep - 1].quorum &&
-                          " Maximum reached."}
                       </AlertDescription>
                     </Alert>
                   )}

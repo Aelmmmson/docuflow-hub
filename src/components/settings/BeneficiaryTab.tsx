@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { Plus, Edit2, Save, CheckCircle2 } from "lucide-react";
+import { Plus, Edit2, Save, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -370,7 +370,9 @@ export function BeneficiaryTab() {
               />
               <div className="absolute right-2.5 top-2.5 flex items-center">
                 {verifyingAccount ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" title="Verifying in Core Banking..." />
+                  <span title="Verifying in Core Banking...">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </span>
                 ) : accountVerified ? (
                   <div className="text-emerald-600 dark:text-emerald-400 animate-in zoom-in-50" title="Core Banking Account Verified">
                     <CheckCircle2 className="h-4 w-4" />

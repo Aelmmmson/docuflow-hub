@@ -746,19 +746,38 @@ const rejectDoc = async (req, res) => {
             (SELECT COUNT(*) FROM doc_approvers WHERE doctype_id = ? AND approval_stage = ? AND approver_id = ?) AS is_assigned,
             (SELECT COUNT(*) FROM doc_approvers WHERE doctype_id = ? AND approval_stage = ? AND approver_id = ? AND is_mandatory = 1) AS is_mandatory,
             (SELECT COUNT(*) FROM doc_approvers WHERE doctype_id = ? AND approval_stage = ? AND is_mandatory = 1) AS mandatory_count,
+            (SELECT COUNT(*) FROM doc_approvers WHERE doctype_id = ? AND approval_stage = ?) AS total_stage_approvers,
             (SELECT quorum FROM doc_approval_setups WHERE doctype_id = ? AND approval_stage = ?) AS quorum,
-            (SELECT COUNT(*) FROM approval_activities WHERE doc_id = ? AND approval_stage = ?) AS approved_count`;
+            (SELECT COUNT(*) FROM approval_activities WHERE doc_id = ? AND approval_stage = ?) AS approved_count,
+            (SELECT COUNT(DISTINCT approved_by) FROM approval_activities WHERE doc_id = ? AND approval_stage = ?) AS acted_count,
+            (SELECT COUNT(*) FROM approval_activities WHERE doc_id = ? AND approval_stage = ? AND approved_by = ?) AS user_acted_count`;
 
-        connection.query(checkEligibilityQuery, [doctypeId, currentApprovalStage, userId, doctypeId, currentApprovalStage, userId, doctypeId, currentApprovalStage, doctypeId, currentApprovalStage, docId, currentApprovalStage], (eErr, eResults) => {
+        connection.query(checkEligibilityQuery, [
+          doctypeId, currentApprovalStage, userId, 
+          doctypeId, currentApprovalStage, userId, 
+          doctypeId, currentApprovalStage, 
+          doctypeId, currentApprovalStage,
+          doctypeId, currentApprovalStage, 
+          docId, currentApprovalStage, 
+          docId, currentApprovalStage,
+          docId, currentApprovalStage, userId
+        ], (eErr, eResults) => {
           if (eErr || !eResults.length || !eResults[0].is_assigned) {
             connection.release();
             return res.status(403).json({ message: "You are not an assigned approver for the current stage.", code: "403" });
           }
 
+          if (parseInt(eResults[0].user_acted_count) > 0) {
+            connection.release();
+            return res.status(400).json({ message: "You have already recorded an action for this stage.", code: "400" });
+          }
+
           const isUserMandatory = parseInt(eResults[0].is_mandatory) === 1;
           const mandatoryCount = parseInt(eResults[0].mandatory_count);
+          const totalStageApprovers = parseInt(eResults[0].total_stage_approvers);
           const quorum = parseInt(eResults[0].quorum);
           const approvedCount = parseInt(eResults[0].approved_count);
+          const actedCount = parseInt(eResults[0].acted_count);
 
           if (!isUserMandatory) {
             if (mandatoryCount > 0 && approvedCount < mandatoryCount) {
@@ -777,48 +796,62 @@ const rejectDoc = async (req, res) => {
             (doc_id, approved_by, comment, approval_stage) 
             VALUES (?, ?, ?, ?)`;
 
-        connection.query(approvalQuery, [docId, userId, remarks, currentApprovalStage], (err, approvalResult) => {
-          if (err) {
-            connection.release();
-            console.error("Error recording rejection:", err);
-            return res.status(500).json({ 
-              message: "Failed to record rejection",
-              code: "500"
-            });
-          }
-
-          // Update document status and reset approvers
-          const updateDocQuery = `
-            UPDATE request_documents 
-            SET status = 'REJECTED',
-                decline_reason = ?,
-                current_approvers = 0,
-                is_required_approvers_left = 0
-            WHERE id = ?`;
-
-          connection.query(updateDocQuery, [remarks,docId], (err, updateResult) => {
-            connection.release();
-            
-            if(err) {
-              console.error("Update error:", err);
+          connection.query(approvalQuery, [docId, userId, remarks || "Rejected", currentApprovalStage], (err, approvalResult) => {
+            if (err) {
+              connection.release();
+              console.error("Error recording rejection:", err);
               return res.status(500).json({ 
-                message: "Failed to update document status",
+                message: "Failed to record rejection",
                 code: "500"
               });
             }
 
-            // Trigger decline notification email to stakeholders
-            notifyDocumentDecline(docId, userId, remarks).catch(err => console.error("[EMAIL ERROR] Decline email failed:", err));
+            // Calculate if the document must be fully rejected:
+            // Mandatory rejection ALWAYS rejects document.
+            // Non-mandatory rejection ONLY rejects document if remaining potential approvals cannot reach quorum.
+            const maxPossibleApprovals = approvedCount + Math.max(0, totalStageApprovers - (actedCount + 1));
+            const shouldRejectDocument = isUserMandatory || (maxPossibleApprovals < quorum);
 
-            res.status(200).json({
-              message: "Document rejected successfully",
-              code: "200"
-            });
+            if (shouldRejectDocument) {
+              // Update document status to REJECTED
+              const updateDocQuery = `
+                UPDATE request_documents 
+                SET status = 'REJECTED',
+                    decline_reason = ?,
+                    current_approvers = 0,
+                    is_required_approvers_left = 0
+                WHERE id = ?`;
+
+              connection.query(updateDocQuery, [remarks || "Rejected", docId], (err, updateResult) => {
+                connection.release();
+                
+                if (err) {
+                  console.error("Update error:", err);
+                  return res.status(500).json({ 
+                    message: "Failed to update document status",
+                    code: "500"
+                  });
+                }
+
+                // Trigger decline notification email to stakeholders
+                notifyDocumentDecline(docId, userId, remarks).catch(err => console.error("[EMAIL ERROR] Decline email failed:", err));
+
+                res.status(200).json({
+                  message: "Document rejected successfully",
+                  code: "200"
+                });
+              });
+            } else {
+              connection.release();
+              res.status(200).json({
+                message: "Rejection recorded. Document remains pending as quorum can still be met by other approvers.",
+                code: "200"
+              });
+            }
           });
         });
       });
     });
-  });
   } catch (error) {
     console.error("Unexpected error in rejectDoc:", error);
     res.status(500).json({
