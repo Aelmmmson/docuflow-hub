@@ -13,6 +13,7 @@ const CNS_APP_KEY =
 const ACTIVITY_CODES = {
   RESET_PASSWORD: "AC6m6Y3d7jx5Zm",
   AWAITING_APPROVAL: "ACdt7W8_q6yt_y",
+  ACCOUNT_CREATION: "ACZpPFG2Mov9iH",
 };
 
 // Robust Base64 Image Loader for USG Brand Logo (/usg-logo-O.png)
@@ -419,6 +420,54 @@ async function notifyPasswordReset({ email, recipientName, newPassword = null, m
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 1b. ACCOUNT CREATION EMAIL NOTIFICATION
+// ─────────────────────────────────────────────────────────────────────────────
+async function notifyAccountCreation({ email, recipientName, employeeId = null, roleName = null, temporaryPassword = "pass1234" }) {
+  const formattedRole = roleName ? String(roleName).charAt(0).toUpperCase() + String(roleName).slice(1) : null;
+
+  const details = [
+    { label: "Account Email", value: email },
+  ];
+
+  if (employeeId) {
+    details.push({ label: "Staff / Employee ID", value: `<span style="font-weight:700;">${employeeId}</span>` });
+  }
+
+  if (formattedRole) {
+    details.push({ label: "Assigned Role", value: `<span style="font-weight:700;color:#0b64f4;">${formattedRole}</span>` });
+  }
+
+  if (temporaryPassword) {
+    details.push({ label: "Temporary Password", value: `<span style="font-family: monospace; font-size: 15px; font-weight: 800; color: #0b64f4;">${temporaryPassword}</span>` });
+  }
+
+  details.push({ label: "Account Status", value: "<span style='color:#16a34a;font-weight:700;'>Active</span>" });
+
+  const htmlContent = buildHtmlEmailTemplate({
+    title: "xDMS - Welcome to DocuFlow Hub (Account Created)",
+    headlineHtml: "Welcome to<br />DocuFlow Hub!",
+    subHeadlineHtml: "Your user account has been<br />successfully created.",
+    actionPromptText: "Your account credentials and access details are provided below. Please log in using your temporary password and update it upon first access to secure your account.",
+    subNoteText: "If you believe this account was created for you in error, please contact your system administrator immediately.",
+    templateType: "security",
+    recipientName: recipientName || "Valued User",
+    detailsPosition: "beforeButton",
+    details,
+    actionButton: {
+      label: "LOG IN TO YOUR ACCOUNT",
+      url: "http://localhost:8046/login"
+    }
+  });
+
+  return await sendCnsEmail({
+    activityCode: ACTIVITY_CODES.ACCOUNT_CREATION,
+    recipientEmail: email,
+    subject: "xDMS - Welcome to DocuFlow Hub (Account Created)",
+    htmlContent,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 2. DOCUMENT SUBMITTED NOTIFICATION (Sent to Originator AND Stage 1 Approvers)
 // ─────────────────────────────────────────────────────────────────────────────
 async function notifyDocumentSubmission(docId) {
@@ -758,6 +807,7 @@ async function notifyDocumentDecline(docId, declinedByUserId, declineReason = "N
 module.exports = {
   sendCnsEmail,
   notifyPasswordReset,
+  notifyAccountCreation,
   notifyDocumentSubmission,
   notifyDocumentApprovalStep,
   notifyDocumentDecline,

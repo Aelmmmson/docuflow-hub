@@ -8,7 +8,7 @@ const passwordResetTokenCollection = "password_reset_tokens";
 const pool = require("../mysqlconfig");
 const jwt = require("jsonwebtoken");
 const { refreshToken } = require("firebase-admin/app");
-const { notifyPasswordReset } = require("../services/emailService");
+const { notifyPasswordReset, notifyAccountCreation } = require("../services/emailService");
 require("dotenv").config();
 
 /***********************************************************************************************************
@@ -112,12 +112,13 @@ const register = async (req, res) => {
 			const insertRole = await helper.dynamicInsert("model_has_roles", roleData);
 
 			if (insertRole.status === "success") {
-				notifyPasswordReset({
+				notifyAccountCreation({
 					email: email,
 					recipientName: `${first_name} ${last_name}`,
-					newPassword: "pass1234",
-					message: "Your xDMS user account has been created. Your default temporary password is set to: <strong>pass1234</strong>."
-				}).catch(err => console.error("Registration password email failed:", err));
+					employeeId: employee_id,
+					roleName: role,
+					temporaryPassword: "pass1234",
+				}).catch(err => console.error("Account creation email notification failed:", err));
 
 				return res.status(201).json({ result: "User registered successfully", code: "201" });
 			} else {
