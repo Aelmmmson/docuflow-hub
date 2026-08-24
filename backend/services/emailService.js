@@ -5,28 +5,26 @@ const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
 
+const APP_BASE_URL = (
+  process.env.EMAIL_SERVICE_BASE_URL ||
+  process.env.APP_BASE_URL ||
+  process.env.FRONTEND_URL ||
+  "http://localhost:8046"
+).replace(/\/$/, "");
+
 const CNS_EMAIL_API_URL =
   process.env.CNS_EMAIL_API_URL || "http://10.203.14.33:8182/cns/api/v1/notification/send/email";
 const CNS_APP_KEY =
   process.env.CNS_APP_KEY || "28925c2f07144f12939fed974d5b1f10";
 
 const ACTIVITY_CODES = {
-  RESET_PASSWORD: "AC6m6Y3d7jx5Zm",
-  AWAITING_APPROVAL: "ACdt7W8_q6yt_y",
-  ACCOUNT_CREATION: "ACZpPFG2Mov9iH",
+  RESET_PASSWORD: process.env.EMAIL_ACTIVITY_CODE_RESET_PASSWORD || "AC6m6Y3d7jx5Zm",
+  AWAITING_APPROVAL: process.env.EMAIL_ACTIVITY_CODE_AWAITING_APPROVAL || "ACdt7W8_q6yt_y",
+  ACCOUNT_CREATION: process.env.EMAIL_ACTIVITY_CODE_ACCOUNT_CREATION || "ACZpPFG2Mov9iH",
 };
 
-// Robust Base64 Image Loader for USG Brand Logo (/usg-logo-O.png)
-let LOGO_BASE64_SRC = "http://10.203.14.169/usg-logo-O.png";
-try {
-  const logoPath = path.resolve(__dirname, "../../public/usg-logo-O.png");
-  if (fs.existsSync(logoPath)) {
-    const logoBuf = fs.readFileSync(logoPath);
-    LOGO_BASE64_SRC = `data:image/png;base64,${logoBuf.toString("base64")}`;
-  }
-} catch (e) {
-  console.error("[EMAIL SERVICE] Failed loading logo base64:", e);
-}
+// CID (Content-ID) Image Source for USG Brand Logo (prevents email client blocking of base64 data URIs)
+const LOGO_SRC = process.env.EMAIL_LOGO_SRC || "cid:usg-logo";
 
 /**
  * Executes async query using database connection pool with Promise wrapper
@@ -263,7 +261,7 @@ function buildHtmlEmailTemplate({
           <table role="presentation" border="0" cellpadding="0" cellspacing="0">
             <tr>
               <td style="vertical-align:middle;padding-right:10px;">
-                <img src="${LOGO_BASE64_SRC}" alt="USG Logo" width="34" height="34" style="display:block;border:0;outline:none;text-decoration:none;" />
+                <img src="${LOGO_SRC}" alt="USG Logo" width="34" height="34" style="display:block;border:0;outline:none;text-decoration:none;" />
               </td>
               <td style="vertical-align:middle;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:26px;line-height:32px;font-weight:700;color:#0f1115;letter-spacing:-0.4px;">
                 xDMS
@@ -386,7 +384,7 @@ async function notifyPasswordReset({ email, recipientName, newPassword = null, m
       ],
       actionButton: {
         label: "SET PERSONAL PASSWORD",
-        url: "http://localhost:8046/profile?tab=security"
+        url: `${APP_BASE_URL}/profile?tab=security`
       }
     });
   } else {
@@ -406,7 +404,7 @@ async function notifyPasswordReset({ email, recipientName, newPassword = null, m
       ],
       actionButton: {
         label: "SECURE YOUR ACCOUNT",
-        url: "http://localhost:8046/profile?tab=security"
+        url: `${APP_BASE_URL}/profile?tab=security`
       }
     });
   }
@@ -455,7 +453,7 @@ async function notifyAccountCreation({ email, recipientName, employeeId = null, 
     details,
     actionButton: {
       label: "LOG IN TO YOUR ACCOUNT",
-      url: "http://localhost:8046/login"
+      url: `${APP_BASE_URL}/login`
     }
   });
 
@@ -555,7 +553,7 @@ async function notifyDocumentSubmission(docId) {
         ],
         actionButton: canUserAct ? {
           label: "APPROVE REQUEST",
-          url: `http://localhost:8046/approval?docId=${encodeURIComponent(doc.doc_id)}&open=true`
+          url: `${APP_BASE_URL}/approval?docId=${encodeURIComponent(doc.doc_id)}&open=true`
         } : null
       });
 
@@ -718,7 +716,7 @@ async function notifyDocumentApprovalStep(docId, approvedByUserId) {
         ],
         actionButton: canUserAct ? {
           label: "APPROVE REQUEST",
-          url: `http://localhost:8046/approval?docId=${encodeURIComponent(doc.doc_id)}&open=true`
+          url: `${APP_BASE_URL}/approval?docId=${encodeURIComponent(doc.doc_id)}&open=true`
         } : null
       });
 
