@@ -783,7 +783,7 @@ async function drawApprovalCard(
  * Draws a placeholder when signature is not available
  */
 function drawSignaturePlaceholder(page: any, x: number, y: number, font: any) {
-  page.drawText("[Pending signature]", {
+  page.drawText("[Signature N/A]", {
     x: x,
     y: y + 30,
     size: 7,

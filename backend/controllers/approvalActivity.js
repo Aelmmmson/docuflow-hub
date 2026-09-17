@@ -283,58 +283,78 @@ const approveDoc = async (req, res) => {
           });
         }
 
+        // First query to get current document status and approval stage
+        const getDocQuery = `
+          SELECT rd.id, rd.doc_id, rd.current_approvers, rd.doctype_id, rd.status, rd.approval_stage,
+                 COALESCE(
+                   (SELECT MAX(CAST(approval_stage AS UNSIGNED)) FROM doc_approval_setups WHERE doctype_id = rd.doctype_id),
+                   (SELECT MAX(CAST(approval_stage AS UNSIGNED)) FROM doc_approvers WHERE doctype_id = rd.doctype_id),
+                   1
+                 ) AS max_approval_level 
+          FROM request_documents rd 
+          WHERE (rd.id = ? OR rd.doc_id = ?)`;
+        const docResults = await helper.selectRecordsWithQuery(getDocQuery, [docId, docId]);
+        
+        if (!docResults.data || docResults.data.length === 0) {
+          return res.status(404).json({
+            message: "Document not found",
+            code: "404"
+          });
+        }
+        
+        const document = docResults.data[0];
+        const realDocId = document.id;
+
         //update request_documents table with customer description and customer number
         //Only update if customerDesc is provided - never overwrite with null
         if(customerDesc !== undefined && customerDesc !== null && cr_account !== undefined){
           const documentData_ = {customer_desc: customerDesc || "", customer_no: cr_account || null};
-          await helper.dynamicUpdateWithId(documentCollection, documentData_, docId);
+          await helper.dynamicUpdateWithId(documentCollection, documentData_, realDocId);
         }
 
-        // First query to get current document status and approval stage
-        const getDocQuery = `SELECT rd.current_approvers,rd.doctype_id,rd.status, rd.approval_stage,count(a.doctype_id) max_approval_level FROM request_documents rd join doc_approval_setups a ON a.doctype_id = rd.doctype_id WHERE rd.id = ?`;
-        const docResults = await helper.selectRecordsWithQuery(getDocQuery, [docId]);
-        
-        const document = docResults.data[0];
         let approvalStage = parseInt(document.approval_stage);
         let current_approvals = document.current_approvers === null ? 0 : parseInt(document.current_approvers);
         let doctype_id = document.doctype_id;
-        let max_approval_level = document.max_approval_level;
+        let max_approval_level = parseInt(document.max_approval_level) || 1;
         
         //get the number of approvers of that level
         const getCurrentLevelApproversCount = `SELECT (SELECT COUNT(*) FROM doc_approvers WHERE doctype_id = ? AND approval_stage = ?) as all_approvers`;
         const all_approvers = await helper.selectRecordsWithQuery(getCurrentLevelApproversCount,[doctype_id,approvalStage])
         
-        let countAllApprovers = parseInt(all_approvers.data[0].all_approvers);
+        let countAllApprovers = parseInt(all_approvers.data[0]?.all_approvers || 0);
 
         //get the number of people who are required to approve the document
         const getCurrentLevelRequiredApproversCount = `SELECT (SELECT COUNT(*) FROM doc_approvers WHERE doctype_id = ? AND approval_stage = ? AND is_mandatory = ?) as required_approvers`;
         const required_approvers_results = await helper.selectRecordsWithQuery(getCurrentLevelRequiredApproversCount,[doctype_id,approvalStage,1])
 
-        let countRequiredApprovers = parseInt(required_approvers_results.data[0].required_approvers);
+        let countRequiredApprovers = parseInt(required_approvers_results.data[0]?.required_approvers || 0);
 
         //get the number of people who have approved the document on the current level
         const getCurrentLevelApprovedApproversCount = `SELECT (SELECT current_approvers from request_documents where id = ?) as approved_approvers`;
-        const approved_approvers = await helper.selectRecordsWithQuery(getCurrentLevelApprovedApproversCount,[docId])
+        const approved_approvers = await helper.selectRecordsWithQuery(getCurrentLevelApprovedApproversCount,[realDocId])
 
-        let countApprovedApprovers = parseInt(approved_approvers.data[0].approved_approvers===null ? 0 : approved_approvers.data[0].approved_approvers);
+        let countApprovedApprovers = parseInt(approved_approvers.data[0]?.approved_approvers === null || approved_approvers.data[0]?.approved_approvers === undefined ? 0 : approved_approvers.data[0].approved_approvers);
 
         //get quorum for the document's current approval level
-        const getQuorum = `SELECT (SELECT quorum FROM doc_approval_setups WHERE doctype_id = ? AND approval_stage = ?) as quorum`;
+        const getQuorum = `SELECT quorum FROM doc_approval_setups WHERE doctype_id = ? AND approval_stage = ?`;
         const quorum_results = await helper.selectRecordsWithQuery(getQuorum,[doctype_id,approvalStage])
 
-        let quorum = parseInt(quorum_results.data[0].quorum);
+        let quorum = 1;
+        if (quorum_results.data && quorum_results.data.length > 0 && quorum_results.data[0].quorum !== null && quorum_results.data[0].quorum !== undefined) {
+          quorum = parseInt(quorum_results.data[0].quorum) || 1;
+        }
 
         //get the approvers who are not required to approve that have approved the document
-        const getApproversWhoHaveApproved = `SELECT (SELECT COUNT(*) FROM approval_activities WHERE doc_id = ?  AND approved_by IN (SELECT approver_id FROM doc_approvers WHERE doctype_id = ? AND approval_stage = ? AND is_mandatory = ?)) as non_required_approvers_approved`;
-        const non_required_approvers_approved_results = await helper.selectRecordsWithQuery(getApproversWhoHaveApproved,[docId,doctype_id,approvalStage,0])
+        const getApproversWhoHaveApproved = `SELECT (SELECT COUNT(*) FROM approval_activities WHERE doc_id = ? AND approved_by IN (SELECT approver_id FROM doc_approvers WHERE doctype_id = ? AND approval_stage = ? AND is_mandatory = ?)) as non_required_approvers_approved`;
+        const non_required_approvers_approved_results = await helper.selectRecordsWithQuery(getApproversWhoHaveApproved,[realDocId,doctype_id,approvalStage,0])
 
-        let countNonRequiredApproversApproved = parseInt(non_required_approvers_approved_results.data[0].non_required_approvers_approved);
+        let countNonRequiredApproversApproved = parseInt(non_required_approvers_approved_results.data[0]?.non_required_approvers_approved || 0);
 
         //check if the imcoming user is required to approve the document
         const isApproverRequiredQuery = `select count(*) as is_approver_required from doc_approvers where doctype_id = ? and approval_stage = ? and approver_id = ? and is_mandatory = ?`;
         const isApproverRequired_results = await helper.selectRecordsWithQuery(isApproverRequiredQuery,[doctype_id,approvalStage,userId,1])
 
-        let isApproverRequired = parseInt(isApproverRequired_results.data[0].is_approver_required);
+        let isApproverRequired = parseInt(isApproverRequired_results.data[0]?.is_approver_required || 0);
 
         // Security check for optional approver eligibility
         if (isApproverRequired !== 1) {
@@ -352,7 +372,6 @@ const approveDoc = async (req, res) => {
           }
         }
 
-
         //if user is required to approve the document check if the user will complete the required approvers
         let isRequiredApproversLeft = 0;
         let countNonRequiredApprovers = quorum - countRequiredApprovers; // the number of approvers who are required to approve
@@ -367,192 +386,69 @@ const approveDoc = async (req, res) => {
         }
 
         //increment the approval stage if the required number of approvers have approved the document
-        console.log("countApprovedApprovers",countApprovedApprovers+1);
-        console.log("quorum",quorum);
+        console.log("countApprovedApprovers", countApprovedApprovers + 1);
+        console.log("quorum", quorum);
 
         const willCompleteStage = (countApprovedApprovers + 1) >= quorum;
-        console.log("willCompleteStage",willCompleteStage);
+        console.log("willCompleteStage", willCompleteStage);
         const newApprovalStage = willCompleteStage ? approvalStage + 1 : approvalStage; //if the stage is complete, increment the stage
-        const current_approvers = willCompleteStage ? 0 : current_approvals+1; //if the stage is complete, reset the current approvers to 0
+        const current_approvers = willCompleteStage ? 0 : current_approvals + 1; //if the stage is complete, reset the current approvers to 0
         isRequiredApproversLeft = willCompleteStage ? 0 : isRequiredApproversLeft; //if the stage is complete, reset the isRequiredApproversLeft to 0
-        const isFullyApproved = newApprovalStage > document.max_approval_level;
+        const isFullyApproved = newApprovalStage > max_approval_level;
         const newStatus = isFullyApproved ? 'APPROVED' : 'PENDING';
 
         // Add this query before calculating willCompleteStage
         const getMandatoryApproversCount = `SELECT COUNT(*) as mandatory_count FROM doc_approvers WHERE doctype_id = ? AND approval_stage = ? AND is_mandatory = 1`;
         const mandatoryResults = await helper.selectRecordsWithQuery(getMandatoryApproversCount,[doctype_id,newApprovalStage])
 
-        const mandatoryCount = mandatoryResults.data[0].mandatory_count;
+        const mandatoryCount = mandatoryResults.data[0]?.mandatory_count || 0;
 
         // If stage completes and advances to new stage, set isRequiredApproversLeft to 1 if new stage has any mandatory approvers!
         isRequiredApproversLeft = willCompleteStage ? (mandatoryCount > 0 ? 1 : 0) : isRequiredApproversLeft;
 
+        let documentData;
         
         if(!isFullyApproved){
-          // Modified approval query to include approval_stage
-          // const approvalQuery = `INSERT INTO approval_activities (doc_id, approved_by, comment, approval_stage) VALUES (?, ?, ?, ?)`;
-          const approvalActivityData = {doc_id: docId, approved_by: userId, comment: remarks, approval_stage: approvalStage};
+          const approvalActivityData = {doc_id: realDocId, approved_by: userId, comment: remarks, approval_stage: approvalStage};
           const approvalResult = await helper.dynamicInsert(approvalActivityCollection, approvalActivityData);
 
           if(approvalResult.status === "success"){
-            //update the documents details1
-            // const updateDocQuery = `UPDATE request_documents SET status = ?, approval_stage = ?, current_approvers = ?, is_required_approvers_left = ? WHERE id = ?`;
             if(recommended_amount){
               documentData = {status: newStatus, approval_stage: newApprovalStage, current_approvers: current_approvers, is_required_approvers_left: isRequiredApproversLeft,approved_amount:recommended_amount};
             }else{
               documentData = {status: newStatus, approval_stage: newApprovalStage, current_approvers: current_approvers, is_required_approvers_left: isRequiredApproversLeft};
             }
-            const updateDocResult = await helper.dynamicUpdateWithId(documentCollection,documentData,docId);
+            const updateDocResult = await helper.dynamicUpdateWithId(documentCollection,documentData,realDocId);
             if (updateDocResult.status === "success") {
-              notifyDocumentApprovalStep(docId, userId).catch(err => console.error("[EMAIL ERROR] Approval email failed:", err));
+              notifyDocumentApprovalStep(realDocId, userId).catch(err => console.error("[EMAIL ERROR] Approval email failed:", err));
               res.status(200).json({message:"Document approved successfully",code:"200"});
             } else {
-              res.status(200).json({message:"Failed to approve document",code:"200"});
+              res.status(400).json({message:"Failed to update document status",code:"400"});
             }
           }
         }
 
         //check if the document is fully approved
         if(isFullyApproved){
-              
-              // if(db_account){
-               
-              //   //for generating document reference
-              //   const generateDocRef = () => {
-              //     const randomStr = Math.random().toString(36).substring(2, 15);
-              //     const timestamp = Date.now();
-              //     return randomStr.substr(0, 2) + timestamp;
-              //   };
+          const approvalActivityData = {doc_id: realDocId, approved_by: userId, comment: remarks, approval_stage: approvalStage};
+          const approvalResult = await helper.dynamicInsert(approvalActivityCollection, approvalActivityData);
 
-              //   const generateTransRef = () => {
-
-              //     // Similar to PHP's rand(), generates random integer between min and max
-              //     const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-              //     const randomStr = Math.random().toString(36).substring(2, 8); //get random string 
-              //     const timestamp = Date.now();
-              //     const randomNum = rand(10, 99); // Add random 4-digit number
-              //     return randomStr.substr(0, 2) + timestamp + randomNum;
-
-              //   };
-
-              //   const ref_no = generateDocRef(); //reference for document
-              //   const trans_ref = generateTransRef(); //reference for transaction
-              //   const currency = "SLE";
-               
-              //   let amount = null;
-              //   if(recommended_amount){
-              //      amount = recommended_amount
-              //      console.log("this is true")
-              //     }else{
-              //       amount = requested_amount
-              //       console.log("this is false")
-              //     }
-              //   const data = JSON.stringify({
-              //     "approvedBy": userId,
-              //     "channelCode": "HRP",
-              //     "transType": "SAL",
-              //     "debitAccounts": [{
-              //       "debitAmount": amount,
-              //       "debitAccount": db_account,
-              //       "debitCurrency": currency,
-              //       "debitNarration": "Debit for "+trans_type,
-              //       "debitProdRef": "NS_"+trans_ref,
-              //       "debitBranch":"000"
-              //     }],
-              //     "creditAccounts": [{
-              //       "creditAmount": amount,
-              //       "creditAccount": cr_account,
-              //       "creditCurrency": currency,
-              //       "creditNarration": "Credit for "+trans_type,
-              //       "creditProdRef": "BS_"+trans_ref,
-              //       "creditBranch": "000"
-              //     }],
-              //     "referenceNo": ref_no,
-              //     "postedBy": userId
-              //   })
-
-
-              //   let config = {
-              //     method: 'put',
-              //     maxBodyLength: Infinity,
-              //     url: 'http://10.203.14.16:8384/core/api/v1.0/account/performBulkPayment',
-              //     headers: { 
-              //       'x-api-key': '20171411891', 
-              //       'x-api-secret': '141116517P', 
-              //       'Content-Type': 'application/json', 
-              //       'X-FORWARDED-FOR': '172.16.10.1', 
-              //       'Authorization': 'rererer'
-              //     },
-              //     timeout: 30000, // 30 seconds timeout
-              //     data : data
-              //   };
-
-              //   axios.request(config)
-              //   .then(async(response) => {
-              //     if(response.data.responseCode === "000"){
-                    
-              //       // Modified approval query to include approval_stage
-              //       // const approvalQuery = `INSERT INTO approval_activities (doc_id, approved_by, comment, approval_stage) VALUES (?, ?, ?, ?)`;
-              //       const approvalActivityData = {doc_id: docId, approved_by: userId, comment: remarks, approval_stage: approvalStage};
-              //       const approvalResult = await helper.dynamicInsert(approvalActivityCollection, approvalActivityData);
-
-              //       if(approvalResult.status === "success"){
-              //         //update the documents details
-              //         // const updateDocQuery = `UPDATE request_documents SET status = ?, approval_stage = ?, current_approvers = ?, is_required_approvers_left = ? WHERE id = ?`;
-              //         const documentData = {status: newStatus, approval_stage: newApprovalStage, current_approvers: current_approvers, is_required_approvers_left: isRequiredApproversLeft,batch_no:ref_no,is_transaction_failed: false,};
-              //         const updateDocResult = await helper.dynamicUpdateWithId(documentCollection,documentData,docId);
-              //         updateDocResult.status === "success" ? res.status(200).json({message:"Document approved successfully",code:"200"}) : res.status(400).json({message:"Failed to update document status, after successful transaction",code:"400"})
-              //       }
-              //     } else {
-              //       const documentData = {
-              //         status: newStatus, 
-              //         approval_stage: newApprovalStage, 
-              //         current_approvers: current_approvers, 
-              //         is_required_approvers_left: isRequiredApproversLeft,
-              //         is_transaction_failed: true
-              //       };
-              //       const updateResult = await helper.dynamicUpdateWithId(documentCollection, documentData, docId);
-              //       res.status(400).json({message:"Transaction failed, please try again",code:"200"})
-              //     }
-              //   })
-              //   .catch((error) => {
-              //     console.error("Transaction error:", error.code === 'ECONNABORTED' ? 'Request timeout' : error.message);
-              //     // connection.release();
-              //     res.status(500).json({
-              //       message: error.code === 'ECONNABORTED' ? 
-              //         "Transaction timed out after 30 seconds, try again or contact adminstrator" : 
-              //         "Transaction processing failed, try again or contact adminstrator",
-              //       code: "500"
-              //     });
-              //   });
-
-              // }else{
-                // Modified approval query to include approval_stage
-                // const approvalQuery = `INSERT INTO approval_activities (doc_id, approved_by, comment, approval_stage) VALUES (?, ?, ?, ?)`;
-                const approvalActivityData = {doc_id: docId, approved_by: userId, comment: remarks, approval_stage: approvalStage};
-                const approvalResult = await helper.dynamicInsert(approvalActivityCollection, approvalActivityData);
-
-                if(approvalResult.status === "success"){
-                  //update the documents details
-                  // const updateDocQuery = `UPDATE request_documents SET status = ?, approval_stage = ?, current_approvers = ?, is_required_approvers_left = ? WHERE id = ?`;
-                  if(recommended_amount){
-                    documentData = {status: newStatus, approval_stage: newApprovalStage, current_approvers: current_approvers, is_required_approvers_left: isRequiredApproversLeft,approved_amount:recommended_amount};
-                  }else{
-                    documentData = {status: newStatus, approval_stage: newApprovalStage, current_approvers: current_approvers, is_required_approvers_left: isRequiredApproversLeft};
-                  }
-                  const updateDocResult = await helper.dynamicUpdateWithId(documentCollection,documentData,docId);
-                  if (updateDocResult.status === "success") {
-                    notifyDocumentApprovalStep(docId, userId).catch(err => console.error("[EMAIL ERROR] Fully approved email failed:", err));
-                    res.status(200).json({message:"Document fully approved successfully",code:"200"});
-                  } else {
-                    res.status(400).json({message:"Failed to update document status",code:"400"});
-                  }
-                }
-              // }
-            
+          if(approvalResult.status === "success"){
+            if(recommended_amount){
+              documentData = {status: newStatus, approval_stage: newApprovalStage, current_approvers: current_approvers, is_required_approvers_left: isRequiredApproversLeft,approved_amount:recommended_amount};
+            }else{
+              documentData = {status: newStatus, approval_stage: newApprovalStage, current_approvers: current_approvers, is_required_approvers_left: isRequiredApproversLeft};
+            }
+            const updateDocResult = await helper.dynamicUpdateWithId(documentCollection,documentData,realDocId);
+            if (updateDocResult.status === "success") {
+              notifyDocumentApprovalStep(realDocId, userId).catch(err => console.error("[EMAIL ERROR] Fully approved email failed:", err));
+              res.status(200).json({message:"Document fully approved successfully",code:"200"});
+            } else {
+              res.status(400).json({message:"Failed to update document status",code:"400"});
+            }
+          }
         }
-    
-  }catch (error) {
+  } catch (error) {
     console.error("Unexpected error in approveDoc:", error);
     res.status(500).json({
       message: "An unexpected error occurred",
@@ -708,7 +604,7 @@ const rejectDoc = async (req, res) => {
     const getDocQuery = `
       SELECT rd.*, rd.approval_stage 
       FROM request_documents rd 
-      WHERE rd.id = ?`;
+      WHERE (rd.id = ? OR rd.doc_id = ?)`;
 
     pool.getConnection((err, connection) => {
       if (err) {
@@ -719,7 +615,7 @@ const rejectDoc = async (req, res) => {
         });
       }
 
-      connection.query(getDocQuery, [docId], (err, docResults) => {
+      connection.query(getDocQuery, [docId, docId], (err, docResults) => {
         if (err) {
           connection.release();
           console.error("Error fetching document:", err);
@@ -737,6 +633,7 @@ const rejectDoc = async (req, res) => {
           });
         }
 
+        const realDocId = docResults[0].id;
         const currentApprovalStage = docResults[0].approval_stage;
         const doctypeId = docResults[0].doctype_id;
 
@@ -758,9 +655,9 @@ const rejectDoc = async (req, res) => {
           doctypeId, currentApprovalStage, 
           doctypeId, currentApprovalStage,
           doctypeId, currentApprovalStage, 
-          docId, currentApprovalStage, 
-          docId, currentApprovalStage,
-          docId, currentApprovalStage, userId
+          realDocId, currentApprovalStage, 
+          realDocId, currentApprovalStage,
+          realDocId, currentApprovalStage, userId
         ], (eErr, eResults) => {
           if (eErr || !eResults.length || !eResults[0].is_assigned) {
             connection.release();
@@ -773,11 +670,11 @@ const rejectDoc = async (req, res) => {
           }
 
           const isUserMandatory = parseInt(eResults[0].is_mandatory) === 1;
-          const mandatoryCount = parseInt(eResults[0].mandatory_count);
-          const totalStageApprovers = parseInt(eResults[0].total_stage_approvers);
-          const quorum = parseInt(eResults[0].quorum);
-          const approvedCount = parseInt(eResults[0].approved_count);
-          const actedCount = parseInt(eResults[0].acted_count);
+          const mandatoryCount = parseInt(eResults[0].mandatory_count || 0);
+          const totalStageApprovers = parseInt(eResults[0].total_stage_approvers || 0);
+          const quorum = parseInt(eResults[0].quorum || 1);
+          const approvedCount = parseInt(eResults[0].approved_count || 0);
+          const actedCount = parseInt(eResults[0].acted_count || 0);
 
           if (!isUserMandatory) {
             if (mandatoryCount > 0 && approvedCount < mandatoryCount) {
@@ -796,7 +693,7 @@ const rejectDoc = async (req, res) => {
             (doc_id, approved_by, comment, approval_stage) 
             VALUES (?, ?, ?, ?)`;
 
-          connection.query(approvalQuery, [docId, userId, remarks || "Rejected", currentApprovalStage], (err, approvalResult) => {
+          connection.query(approvalQuery, [realDocId, userId, remarks || "Rejected", currentApprovalStage], (err, approvalResult) => {
             if (err) {
               connection.release();
               console.error("Error recording rejection:", err);
@@ -822,7 +719,7 @@ const rejectDoc = async (req, res) => {
                     is_required_approvers_left = 0
                 WHERE id = ?`;
 
-              connection.query(updateDocQuery, [remarks || "Rejected", docId], (err, updateResult) => {
+              connection.query(updateDocQuery, [remarks || "Rejected", realDocId], (err, updateResult) => {
                 connection.release();
                 
                 if (err) {
