@@ -287,8 +287,8 @@ const approveDoc = async (req, res) => {
         const getDocQuery = `
           SELECT rd.id, rd.doc_id, rd.current_approvers, rd.doctype_id, rd.status, rd.approval_stage,
                  COALESCE(
-                   (SELECT MAX(CAST(approval_stage AS UNSIGNED)) FROM doc_approval_setups WHERE doctype_id = rd.doctype_id),
                    (SELECT MAX(CAST(approval_stage AS UNSIGNED)) FROM doc_approvers WHERE doctype_id = rd.doctype_id),
+                   (SELECT MAX(CAST(approval_stage AS UNSIGNED)) FROM doc_approval_setups WHERE doctype_id = rd.doctype_id),
                    1
                  ) AS max_approval_level 
           FROM request_documents rd 
@@ -342,6 +342,11 @@ const approveDoc = async (req, res) => {
         let quorum = 1;
         if (quorum_results.data && quorum_results.data.length > 0 && quorum_results.data[0].quorum !== null && quorum_results.data[0].quorum !== undefined) {
           quorum = parseInt(quorum_results.data[0].quorum) || 1;
+        }
+
+        // Safety cap: If total assigned approvers for this stage is less than quorum, cap quorum at total assigned approvers
+        if (countAllApprovers > 0 && quorum > countAllApprovers) {
+          quorum = countAllApprovers;
         }
 
         //get the approvers who are not required to approve that have approved the document
