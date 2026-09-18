@@ -1,28 +1,41 @@
 import { useCallback, useState } from "react";
-import { Upload, FileText, X, Eye, ExternalLink } from "lucide-react";
+import { Upload, FileText, X, Eye, ExternalLink, Printer } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Label } from "recharts";
-import { Button } from "../ui/button";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Scanner } from "./Scanner";
 
 interface FileUploadProps {
   onFileSelect: (file: File | null) => void;
+  onScanSuccess?: (documentId: string, file?: File) => void;
   onView?: () => void;           // optional: trigger view modal from parent
   onRemove?: () => void;         // optional: trigger remove from parent
   documentId?: string;           // document ID from server
   disabled?: boolean;
   showDocumentId?: boolean;      // whether to show document ID in the file card
+  documentType?: string;
+  documentDescription?: string;
+  scannedBy?: string;
+  branch?: string;
 }
 
 export function FileUpload({ 
-  onFileSelect, 
+  onFileSelect,
+  onScanSuccess,
   onView, 
   onRemove, 
   documentId, 
   disabled = false,
-  showDocumentId = true 
+  showDocumentId = true,
+  documentType,
+  documentDescription,
+  scannedBy,
+  branch = "000",
 }: FileUploadProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [activeMode, setActiveMode] = useState<"upload" | "scan">("upload");
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -73,13 +86,27 @@ export function FileUpload({
     }
   }, [onView]);
 
+  const handleScanCompleted = useCallback(
+    (token: string, file?: File) => {
+      if (file) {
+        setSelectedFile(file);
+      }
+      if (onScanSuccess) {
+        onScanSuccess(token, file);
+      } else if (file) {
+        onFileSelect(file);
+      }
+    },
+    [onScanSuccess, onFileSelect]
+  );
+
   // Determine if we should show the uploaded file card
   const showFileCard = selectedFile || (documentId && showDocumentId);
 
   return (
     <div className="space-y-2">
       <Label className="text-xs font-medium text-foreground">
-        Upload Document <span className="text-destructive">*</span>
+        Document Source <span className="text-destructive">*</span>
       </Label>
 
       {showFileCard ? (
@@ -90,11 +117,11 @@ export function FileUpload({
             </div>
             <div>
               <p className="text-xs font-medium text-foreground">
-                {selectedFile?.name || "Uploaded Document"}
+                {selectedFile?.name || "Scanned / Uploaded Document"}
               </p>
               {documentId && showDocumentId && (
                 <p className="text-2xs text-muted-foreground">
-                  Document ID: {documentId}
+                  Document ID: <span className="font-semibold text-primary">{documentId}</span>
                 </p>
               )}
               {selectedFile && !documentId && (
@@ -124,7 +151,7 @@ export function FileUpload({
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-7 w-7 text-muted-foreground hover:text-destructive"
               onClick={handleRemove}
               disabled={disabled}
               title="Remove file"
@@ -134,39 +161,71 @@ export function FileUpload({
           </div>
         </div>
       ) : (
-        <label className={cn(
-          "block cursor-pointer rounded-lg border-2 border-dashed p-6 text-center transition-colors",
-          disabled
-            ? "opacity-50 cursor-not-allowed"
-            : "hover:border-primary/50 hover:bg-muted/50"
-        )}>
-          <input
-            type="file"
-            accept=".pdf"
-            onChange={handleFileChange}
-            className="hidden"
-            disabled={disabled}
-          />
-          <div
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            className={cn(
-              "flex flex-col items-center justify-center",
-              isDragOver && "border-primary bg-primary/5"
-            )}
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 mb-2">
-              <Upload className="h-5 w-5 text-primary" />
-            </div>
-            <p className="text-xs font-medium text-foreground">
-              Click to upload or drag and drop
-            </p>
-            <p className="text-2xs text-muted-foreground mt-1">
-              PDF files only
-            </p>
-          </div>
-        </label>
+        <Tabs
+          value={activeMode}
+          onValueChange={(val) => setActiveMode(val as "upload" | "scan")}
+          className="w-full"
+        >
+          <TabsList className="grid w-full grid-cols-2 h-9 p-1">
+            <TabsTrigger value="upload" className="text-xs gap-1.5 py-1">
+              <Upload className="h-3.5 w-3.5" />
+              Upload PDF File
+            </TabsTrigger>
+            <TabsTrigger value="scan" className="text-xs gap-1.5 py-1">
+              <Printer className="h-3.5 w-3.5" />
+              Scan Document
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="upload" className="mt-2">
+            <label
+              className={cn(
+                "block cursor-pointer rounded-lg border-2 border-dashed p-6 text-center transition-colors",
+                disabled
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:border-primary/50 hover:bg-muted/50"
+              )}
+            >
+              <input
+                type="file"
+                accept=".pdf"
+                onChange={handleFileChange}
+                className="hidden"
+                disabled={disabled}
+              />
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={cn(
+                  "flex flex-col items-center justify-center",
+                  isDragOver && "border-primary bg-primary/5"
+                )}
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 mb-2">
+                  <Upload className="h-5 w-5 text-primary" />
+                </div>
+                <p className="text-xs font-medium text-foreground">
+                  Click to upload or drag and drop
+                </p>
+                <p className="text-2xs text-muted-foreground mt-1">
+                  PDF files only
+                </p>
+              </div>
+            </label>
+          </TabsContent>
+
+          <TabsContent value="scan" className="mt-2">
+            <Scanner
+              onScanSuccess={handleScanCompleted}
+              documentType={documentType}
+              documentDescription={documentDescription}
+              scannedBy={scannedBy}
+              branch={branch}
+              disabled={disabled}
+            />
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );

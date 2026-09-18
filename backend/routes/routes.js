@@ -64,6 +64,7 @@ router.get("/get-approver-setups", approverSetupController.getApproverSetups);
 router.get("/get-approver-users", approverSetupController.getApproverUsers);
 router.post("/create-doc-approvers-setup", approverSetupController.createApproverSetup);
 router.put("/update-doc-approvers-setup", approverSetupController.updateApproverSetup);
+router.get("/verify-doctype-approvers/:doctypeId", approverSetupController.verifyDocTypeApprovers);
 
 //approval activity routes
 router.get("/get-submitted-docs", approvalActivityController.getSubmittedDocs);

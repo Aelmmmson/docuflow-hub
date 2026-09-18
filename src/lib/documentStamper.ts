@@ -411,15 +411,17 @@ export async function createApprovalStampedPdf(
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-    const pageW = 612;
-    const pageH = 792;
+    const firstPage = pdfDoc.getPage(0);
+    const firstPageSize = firstPage ? firstPage.getSize() : { width: 612, height: 792 };
+    const pageW = firstPageSize.width || 612;
+    const pageH = firstPageSize.height || 792;
 
     const layout = {
       startX: 26,
       startY: pageH - 80,
       gapX: 20,
       gapY: 15, // 15px vertical spacing
-      cardW: 270,
+      cardW: Math.min(270, (pageW - 72) / 2),
       cardH: 110,
       cardsPerRow: 2,
       maxCardsPerPage: 12,
@@ -583,7 +585,7 @@ function drawPageHeader(
   totalApprovals: number
 ) {
   const { startX, startY } = layout;
-  const pageW = 612;
+  const pageW = page.getSize().width;
 
   page.drawRectangle({
     x: startX,
@@ -602,11 +604,11 @@ function drawPageHeader(
   });
 
   page.drawText(
-    `DOC: ${docId}  |  TOTAL APPROVALS: ${totalApprovals}`,
+    `DOC: ${docId}`,
     {
-      x: pageW - startX - 250,
+      x: pageW - startX - 130,
       y: startY + 31,
-      size: 8,
+      size: 9,
       font: boldFont,
       color: rgb(0.9, 0.95, 1),
     }

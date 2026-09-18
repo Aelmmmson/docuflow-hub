@@ -295,11 +295,94 @@ const updateApproverSetup = async (req, res) => {
     }
 };
 
+/**
+ * Verifies if a Document Type has valid, active approvers configured
+ * @param {Object} req - Request object containing doctypeId
+ * @param {Object} res - Response object
+ */
+const verifyDocTypeApprovers = async (req, res) => {
+    try {
+        const doctypeId = req.params.doctypeId;
+        if (!doctypeId) {
+            return res.status(400).json({
+                isValid: false,
+                status: "INVALID_PARAM",
+                message: "Document Type ID is required",
+                code: "400"
+            });
+        }
+
+        // Query configured approvers joined with user status
+        const query = `
+            SELECT 
+                da.id,
+                da.doctype_id,
+                da.approver_id,
+                da.is_mandatory,
+                da.approval_stage,
+                u.id AS user_id,
+                CONCAT(u.first_name, ' ', u.last_name) AS user_name,
+                u.status AS user_status
+            FROM doc_approvers da
+            LEFT JOIN users u ON da.approver_id = u.id
+            WHERE da.doctype_id = ?
+        `;
+
+        const approversResult = await helper.selectRecordsWithQuery(query, [doctypeId]);
+        const approverRows = approversResult.data || [];
+
+        if (approverRows.length === 0) {
+            return res.status(200).json({
+                isValid: false,
+                status: "NO_APPROVERS",
+                message: "No approval workflow is configured for this Document Type. Please configure approver setups before creating requests of this type.",
+                inactiveApprovers: [],
+                code: "200"
+            });
+        }
+
+        // Check if any approver is missing/null user OR inactive (status != 1 and status != 'Active' and status != '1')
+        const inactiveOrMissing = approverRows.filter(a => {
+            if (!a.user_id) return true; // User missing from database
+            const status = String(a.user_status).toLowerCase().trim();
+            return status !== "1" && status !== "active";
+        });
+
+        if (inactiveOrMissing.length > 0) {
+            const inactiveNames = Array.from(new Set(inactiveOrMissing.map(a => a.user_name || `User ID: ${a.approver_id}`)));
+            return res.status(200).json({
+                isValid: false,
+                status: "INACTIVE_APPROVERS",
+                message: `One or more configured approvers for this Document Type are currently inactive or unavailable (${inactiveNames.join(", ")}). You cannot create requests until all required approvers are active in the system.`,
+                inactiveApprovers: inactiveNames,
+                code: "200"
+            });
+        }
+
+        return res.status(200).json({
+            isValid: true,
+            status: "VALID",
+            message: null,
+            inactiveApprovers: [],
+            code: "200"
+        });
+
+    } catch (error) {
+        console.error("Error in verifyDocTypeApprovers:", error);
+        return res.status(500).json({
+            isValid: false,
+            status: "ERROR",
+            message: "Failed to verify Document Type approvers",
+            code: "500"
+        });
+    }
+};
+
 module.exports = {
-	getApproverSetups,
+    getApproverSetups,
     getApproverUsers,
     testSpeed,
     createApproverSetup,
-    updateApproverSetup
-	// other controller functions if any
+    updateApproverSetup,
+    verifyDocTypeApprovers
 };

@@ -3,10 +3,12 @@
  */
 
 import { useState, useEffect } from "react";
-import { Search, FileText, X, ExternalLink } from "lucide-react";
+import { Search, FileText, X, ExternalLink, AlertTriangle, UserX, Clock, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -79,8 +81,53 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
+  // Verification state for selected document type's approvers
+  const [approverCheck, setApproverCheck] = useState<{
+    isValid: boolean;
+    status: string;
+    message: string | null;
+    inactiveApprovers?: string[];
+  } | null>(null);
+  const [verifyingApprovers, setVerifyingApprovers] = useState(false);
+
   // Check if selected document type is transactional
   const isTransactionalDoc = selectedDocType?.trans_type === "1";
+
+  // Function to verify approvers for selected document type
+  const verifyApproverSetup = async (doctypeId: string) => {
+    if (!doctypeId) {
+      setApproverCheck(null);
+      return;
+    }
+    try {
+      setVerifyingApprovers(true);
+      const res = await api.get(`/verify-doctype-approvers/${doctypeId}`);
+      const data = res.data;
+      setApproverCheck({
+        isValid: data.isValid === true,
+        status: data.status || (data.isValid ? "VALID" : "NO_APPROVERS"),
+        message: data.message || null,
+        inactiveApprovers: Array.isArray(data.inactiveApprovers) ? data.inactiveApprovers : [],
+      });
+
+      if (data.isValid === false) {
+        toast({
+          title: "Approver Setup Alert",
+          description: data.message || "Selected Document Type has an issue with assigned approvers.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      console.error("Failed to verify approvers:", err);
+      setApproverCheck({
+        isValid: false,
+        status: "ERROR",
+        message: "Could not verify approver setups for this document type.",
+      });
+    } finally {
+      setVerifyingApprovers(false);
+    }
+  };
 
   // Fetch document types & beneficiaries
   useEffect(() => {
@@ -126,6 +173,7 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
       const selectedType = documentTypes.find(t => t.id.toString() === templateType);
       if (selectedType) {
         setSelectedDocType(selectedType);
+        verifyApproverSetup(templateType);
       }
 
       setDetails(selectedTemplate.defaultDescription || "");
@@ -143,6 +191,9 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
       setAmount("");
       setCustomerNumber("");
     }
+
+    // Verify approver setup for the newly selected Document Type
+    verifyApproverSetup(value);
   };
 
   const handleFileSelect = (selectedFile: File | null) => {
@@ -341,6 +392,8 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
     setDetails("");
     setFile(null);
     setSelectedDocType(null);
+    setApproverCheck(null);
+    setVerifyingApprovers(false);
     setShowPreviewModal(false);
     setUploadProgress(0);
     if (onClearTemplate) onClearTemplate();
@@ -393,6 +446,37 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
                   ? "This is a transactional document"
                   : "This is a non-transactional document"}
               </p>
+            )}
+
+            {/* Approver Verification Loading Indicator */}
+            {verifyingApprovers && (
+              <div className="text-[11px] text-amber-600 dark:text-amber-400 animate-pulse flex items-center gap-1.5 mt-2 font-medium">
+                <Clock className="h-3.5 w-3.5 animate-spin" /> Verifying approval workflow & approvers...
+              </div>
+            )}
+
+            {/* Approver Setup Issues Alert Banner */}
+            {approverCheck && !verifyingApprovers && !approverCheck.isValid && (
+              <Alert variant="destructive" className="mt-3 border.destructive/40 bg-destructive/10 text-destructive dark:bg-destructive/20 p-3.5 shadow-sm">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-destructive mt-0.5" />
+                <div className="space-y-1">
+                  <AlertTitle className="text-xs font-bold leading-tight">
+                    {approverCheck.status === "NO_APPROVERS" ? "No Approvers Configured" : "Inactive / Unavailable Approvers"}
+                  </AlertTitle>
+                  <AlertDescription className="text-xs leading-normal">
+                    {approverCheck.message}
+                    {approverCheck.inactiveApprovers && approverCheck.inactiveApprovers.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {approverCheck.inactiveApprovers.map((name, idx) => (
+                          <Badge key={idx} variant="outline" className="text-[10px] bg-background/90 border-destructive/40 text-destructive font-medium">
+                            <UserX className="h-3 w-3 mr-1" /> {name}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </AlertDescription>
+                </div>
+              </Alert>
             )}
           </div>
 
@@ -481,11 +565,25 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
         {/* File Upload Section */}
         <FileUpload
           onFileSelect={handleFileSelect}
+          onScanSuccess={(scannedToken, scannedFile) => {
+            setDocumentId(scannedToken);
+            if (scannedFile) {
+              setFile(scannedFile);
+            }
+            toast({
+              title: "Scan Upload Successful",
+              description: `Document ID: ${scannedToken}`,
+            });
+          }}
           onView={handleViewFile}
           onRemove={handleRemoveFile}
           documentId={documentId}
           disabled={uploading}
           showDocumentId={true}
+          documentType={documentType}
+          documentDescription={details}
+          scannedBy={currentUser ? `${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim() : "System User"}
+          branch={currentUser?.branch || "000"}
         />
 
         {/* Action Buttons */}
@@ -495,7 +593,14 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
           </Button>
           <Button
             onClick={handleSaveDraft}
-            disabled={!documentId || !documentType || !details.trim() || uploading}
+            disabled={
+              !documentId || 
+              !documentType || 
+              !details.trim() || 
+              uploading || 
+              verifyingApprovers || 
+              approverCheck?.isValid === false
+            }
           >
             Save as Draft
           </Button>
