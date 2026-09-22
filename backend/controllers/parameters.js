@@ -74,42 +74,34 @@ const axios = require("axios");
 // returns all the document types and branch parameters
 const getParameters = async (req, res) => {
 	try {
-		// Non-blocking background sync from HR API
-		(async () => {
-			try {
-				const hrRes = await axios.get("http://10.203.14.169/hr/api/employees_rest.php", { timeout: 3000 });
-				if (Array.isArray(hrRes.data) && hrRes.data.length > 0) {
-					const hrBranchCodes = new Set();
-					hrRes.data.forEach(e => {
-						if (e.branch) hrBranchCodes.add(String(e.branch).trim());
-					});
-
-					const existingRes = await helper.selectRecordsWithCondition(documentTypesCollection, [{ code_id: "1" }]);
-					const existing = (existingRes && existingRes.status === "success" && existingRes.data) ? existingRes.data : [];
-
-					for (const bCode of hrBranchCodes) {
-						const found = existing.some(ex => ex.description && ex.description.includes(`(${bCode})`));
-						if (!found) {
-							await helper.dynamicInsert(documentTypesCollection, {
-								code_id: "1",
-								description: `Branch (${bCode})`,
-								posted_by: "1",
-								status: "1",
-								trans_type: "",
-								color_code: ""
-							}).catch(() => {});
-						}
-					}
-				}
-			} catch (syncErr) {
-				// Silent fallback to database branches if HR API is unreachable
-			}
-		})();
-
-		// get all document types and branches from code_creation_details
 		const doctypes = await helper.selectRecordsWithCondition(documentTypesCollection, [{ code_id: "2" }]);
-		const branchesRes = await helper.selectRecordsWithCondition(documentTypesCollection, [{ code_id: "1" }]);
-		const branches = (branchesRes && branchesRes.status === "success" && branchesRes.data) ? branchesRes.data : [];
+		let branches = [];
+
+		// Always fetch live branches from Swagger HR API
+		try {
+			const hrBranchRes = await axios.get("http://10.203.14.114:3099/v1/api/hr/me/branches", {
+				headers: { "x-api-key": process.env.HR_MOBILE_API_KEY || "81780c52fe24634d0ab7164a6e7a74c908da568a906111db" },
+				timeout: 4000
+			});
+
+			if (hrBranchRes.data?.data?.branches && Array.isArray(hrBranchRes.data.data.branches)) {
+				branches = hrBranchRes.data.data.branches.map((b) => ({
+					id: b.id || b.code,
+					code: b.code,
+					description: b.name ? `${b.name} (${b.code})` : b.description || `Branch (${b.code})`,
+					type: b.type
+				}));
+			}
+		} catch (hrErr) {
+			console.warn("Live HR branch API fetch failed, falling back to DB records:", hrErr.message);
+		}
+
+		// Fallback to database branches if live API returned empty
+		if (!branches || branches.length === 0) {
+			const branchesRes = await helper.selectRecordsWithCondition(documentTypesCollection, [{ code_id: "1" }]);
+			branches = (branchesRes && branchesRes.status === "success" && branchesRes.data) ? branchesRes.data : [];
+		}
+
 		const users = await helper.selectRecordsWithQuery('select * from users');
 
 		res.status(200).json({ branches, result: { doctypes, branches, users }, code: "200" });

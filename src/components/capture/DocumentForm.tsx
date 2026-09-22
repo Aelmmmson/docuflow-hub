@@ -70,7 +70,7 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
   const [documentTypes, setDocumentTypes] = useState<DocType[]>([]);
   const [loadingTypes, setLoadingTypes] = useState(true);
   const [selectedDocType, setSelectedDocType] = useState<DocType | null>(null);
-  const [branches, setBranches] = useState<Array<{ id: string | number; description: string }>>([]);
+  const [branches, setBranches] = useState<Array<{ id: string | number; description: string; code?: string }>>([]);
   const [selectedBranch, setSelectedBranch] = useState<string>("");
 
   const [documentType, setDocumentType] = useState("");
@@ -530,24 +530,26 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
           </div>
         </div>
 
-        {/* Originating Branch Selection Dropdown */}
+        {/* Originating Branch (Read-Only / Non-Editable) */}
         <div className="space-y-1.5">
           <Label className="text-xs font-medium flex items-center gap-1.5">
             <Building className="h-3.5 w-3.5 text-primary" />
             <span>Originating Branch</span> <span className="text-destructive">*</span>
           </Label>
-          <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-            <SelectTrigger className="h-9 text-xs">
-              <SelectValue placeholder="Select Originating Branch" />
-            </SelectTrigger>
-            <SelectContent>
-              {branches.map((b) => (
-                <SelectItem key={b.id} value={String(b.id)} className="text-xs">
-                  {b.description}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="p-2.5 rounded-lg border border-border bg-muted/40 flex items-center justify-between">
+            <span className="text-xs font-semibold text-foreground">
+              {(() => {
+                const bObj = branches.find((b) => String(b.id) === String(selectedBranch) || (b.code && String(b.code) === String(selectedBranch)));
+                if (bObj?.description) return bObj.description;
+                if (typeof currentUser?.branch === "string") return currentUser.branch;
+                if (currentUser?.branch && typeof currentUser.branch === "object") return (currentUser.branch as any).description || "Head Office (000)";
+                return "Head Office (000)";
+              })()}
+            </span>
+            <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20 font-medium">
+              Originator Branch
+            </Badge>
+          </div>
         </div>
 
         {/* Transactional Fields: Requested Amount & Beneficiary Account Number side-by-side */}

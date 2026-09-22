@@ -204,14 +204,6 @@ export function ApprovalSetupTab() {
         });
         return;
       }
-      if (stage.approvers.length === 0) {
-        toast({
-          title: "Validation Error",
-          description: "Please select at least one approver.",
-          variant: "destructive",
-        });
-        return;
-      }
     }
 
     setCurrentStep((prev) => Math.min(prev + 1, numberOfStages));
@@ -224,10 +216,10 @@ export function ApprovalSetupTab() {
   const handleSaveAll = async () => {
     const lastStageIndex = currentStep - 1;
     const lastStage = stages[lastStageIndex];
-    if (!lastStage?.name || lastStage.approvers.length === 0) {
+    if (!lastStage?.name) {
       toast({
         title: "Validation Error",
-        description: "Please complete all stage fields.",
+        description: "Please complete all stage name fields.",
         variant: "destructive",
       });
       return;
@@ -241,14 +233,7 @@ export function ApprovalSetupTab() {
         scope: idx === 0 ? "BRANCH" : "HEAD_OFFICE",
         isRequired: idx === 0 ? true : stage.isRequired,
         threshold_amount: 0,
-        approvers: stage.approvers.map((approverName) => {
-          const approver = availableApprovers.find((a) => a.name === approverName);
-          return {
-            userId: approver ? Number(approver.userId) : 0,
-            name: approverName,
-            isMandatory: false,
-          };
-        }),
+        approvers: [],
       })),
     };
 
@@ -634,141 +619,18 @@ export function ApprovalSetupTab() {
                 </div>
               </div>
 
-              {/* Select Approvers */}
-              <div className="space-y-2">
-                <Label className="text-xs font-medium">
-                  Select Approvers <span className="text-destructive">*</span>
-                </Label>
-                <div className="border border-border rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
-                  {availableApprovers.map((approver) => {
-                    const isSelected = stages[currentStep - 1].approvers.includes(approver.name);
-                    return (
-                      <div
-                        key={approver.userId}
-                        onClick={() => toggleApprover(currentStep - 1, approver.name)}
-                        className={cn(
-                          "flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors",
-                          isSelected ? "bg-primary/10" : "hover:bg-muted"
-                        )}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={() => toggleApprover(currentStep - 1, approver.name)}
-                          />
-                          <div
-                            className={cn(
-                              "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold",
-                              isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                            )}
-                          >
-                            {approver.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")
-                              .toUpperCase()}
-                          </div>
-                          <span className="text-xs capitalize">{approver.name}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                {stages[currentStep - 1].approvers.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {stages[currentStep - 1].approvers.map((name) => (
-                      <Badge key={name} variant="secondary" className="text-[10px] capitalize">
-                        {name}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
+              {/* Dynamic Branch / Head Office Routing Info Banner */}
+              <div className="rounded-xl border border-border bg-muted/30 p-3.5 space-y-1">
+                <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Dynamic Approver Routing</span>
+                </span>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  {currentStep === 1
+                    ? "Stage 1 routes dynamically to all active approvers in the document's originating branch."
+                    : "Stage " + currentStep + " escalates to Head Office approvers ordered by ascending signing limit."}
+                </p>
               </div>
-
-              {/* Mandatory Approvers */}
-              {stages[currentStep - 1].approvers.length > 0 && (
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium">
-                    Mandatory Approvers <span className="text-muted-foreground">(optional)</span>
-                  </Label>
-
-                  {stages[currentStep - 1].quorum === stages[currentStep - 1].approvers.length && stages[currentStep - 1].approvers.length > 0 && (
-                    <Alert className="py-2 border-blue-200 bg-blue-50/50 text-blue-900 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
-                      <AlertDescription className="text-xs">
-                        Quorum equals total assigned approvers. Everyone in the group must approve, so mandatory flags are redundant.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  {stages[currentStep - 1].mandatoryApprovers.length === stages[currentStep - 1].quorum && stages[currentStep - 1].approvers.length > stages[currentStep - 1].quorum && (
-                    <Alert className="py-2 border-amber-200 bg-amber-50/50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                      <AlertDescription className="text-xs">
-                        ⚠️ Mandatory approvers satisfy the stage quorum. Additional optional approvers added to this stage will not be able to participate.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  {stages[currentStep - 1].mandatoryApprovers.length > stages[currentStep - 1].quorum && (
-                    <Alert variant="destructive" className="py-2">
-                      <AlertDescription className="text-xs">
-                        Mandatory approvers cannot exceed quorum ({stages[currentStep - 1].quorum}).
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  <div className="border border-border rounded-lg p-3 space-y-2">
-                    {stages[currentStep - 1].quorum === 1 ? (
-                      <RadioGroup
-                        value={stages[currentStep - 1].mandatoryApprovers[0] || ""}
-                        onValueChange={(val) => {
-                          updateStage(currentStep - 1, {
-                            mandatoryApprovers: [val],
-                          });
-                        }}
-                      >
-                        {stages[currentStep - 1].approvers.map((approverName) => (
-                          <div key={approverName} className="flex items-center gap-2">
-                            <RadioGroupItem value={approverName} id={`mandatory-${approverName}`} />
-                            <Label
-                              htmlFor={`mandatory-${approverName}`}
-                              className="text-xs font-normal capitalize cursor-pointer"
-                            >
-                              {approverName}
-                            </Label>
-                          </div>
-                        ))}
-                      </RadioGroup>
-                    ) : (
-                      <>
-                        {stages[currentStep - 1].approvers.map((approverName) => {
-                          const isMandatory = stages[currentStep - 1].mandatoryApprovers.includes(approverName);
-                          const isDisabled =
-                            !isMandatory && stages[currentStep - 1].mandatoryApprovers.length >= stages[currentStep - 1].quorum;
-                          return (
-                            <div key={approverName} className={cn("flex items-center gap-2", isDisabled && "opacity-50")}>
-                              <Checkbox
-                                id={`mandatory-${approverName}`}
-                                checked={isMandatory}
-                                disabled={isDisabled}
-                                onCheckedChange={() => toggleMandatory(currentStep - 1, approverName)}
-                              />
-                              <Label
-                                htmlFor={`mandatory-${approverName}`}
-                                className={cn("text-xs font-normal capitalize", isDisabled ? "cursor-not-allowed" : "cursor-pointer")}
-                              >
-                                {approverName}
-                              </Label>
-                            </div>
-                          );
-                        })}
-                      </>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground">
-                    Selected: {stages[currentStep - 1].mandatoryApprovers.length} / {stages[currentStep - 1].quorum} (max)
-                  </p>
-                </div>
-              )}
             </div>
           )}
 

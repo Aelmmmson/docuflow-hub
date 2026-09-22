@@ -79,6 +79,21 @@ const register = async (req, res) => {
 			});
 		});
 
+		// Single MD / Unlimited Limit check
+		const limitNum = parseFloat(approval_limit) || 0;
+		if (limitNum >= 900000000 || String(role).toLowerCase() === "md" || String(role).toLowerCase().includes("managing director")) {
+			const existingMd = await helper.selectRecordsWithQuery(
+				"SELECT u.id, u.first_name, u.last_name FROM users u JOIN model_has_roles mhr ON u.id = mhr.model_id JOIN roles r ON mhr.role_id = r.id WHERE u.approval_limit >= 900000000 OR LOWER(r.name) = 'md' OR LOWER(r.name) LIKE '%managing director%'"
+			);
+			if (existingMd.status === "success" && Array.isArray(existingMd.data) && existingMd.data.length > 0) {
+				const otherMd = existingMd.data[0];
+				return res.status(409).json({
+					result: `Only ONE user (the Managing Director) is permitted to have an Unlimited signing limit. Currently assigned to ${otherMd.first_name} ${otherMd.last_name}.`,
+					code: "409"
+				});
+			}
+		}
+
 		// Insert user into the database
 		const data = {
 			employee_id,
@@ -467,6 +482,24 @@ const updateUser = async(req,res) =>{
 		const result = helper.checkForNullOrEmpty(dataEntry);
 
 		if(result.status === "success"){
+			// Single MD / Unlimited Limit check
+			const limitNum = parseFloat(approval_limit) || 0;
+			const targetUserId = Number(req.params.userId);
+			if (limitNum >= 900000000 || String(role).toLowerCase() === "md" || String(role).toLowerCase().includes("managing director")) {
+				const existingMd = await helper.selectRecordsWithQuery(
+					"SELECT u.id, u.first_name, u.last_name FROM users u JOIN model_has_roles mhr ON u.id = mhr.model_id JOIN roles r ON mhr.role_id = r.id WHERE u.approval_limit >= 900000000 OR LOWER(r.name) = 'md' OR LOWER(r.name) LIKE '%managing director%'"
+				);
+				if (existingMd.status === "success" && Array.isArray(existingMd.data) && existingMd.data.length > 0) {
+					const otherMd = existingMd.data.find(u => Number(u.id) !== targetUserId);
+					if (otherMd) {
+						return res.status(409).json({
+							result: `Only ONE user (the Managing Director) is permitted to have an Unlimited signing limit. Currently assigned to ${otherMd.first_name} ${otherMd.last_name}.`,
+							code: "409"
+						});
+					}
+				}
+			}
+
 			const data = {
 				employee_id,
 				first_name,

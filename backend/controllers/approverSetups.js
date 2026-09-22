@@ -137,31 +137,20 @@ const createApproverSetup = async (req, res) => {
         for (const stage of stages) {
             const stage_name = stage.name;
             const quorum = stage.quorum;
-            const num_of_approvers = stage.approvers.length;
-            
-            // Count mandatory approvers
+            const num_of_approvers = stage.approvers ? stage.approvers.length : 0;
             let mandatory_approvers = 0;
-            
-            // Insert approvers for this stage
-            for (const approver of stage.approvers) {
-                if (approver.isMandatory) {
-                    mandatory_approvers++;
-                }
 
-                // Insert into doc_approvers table
-                const approverData = {
-                    doctype_id: doctype_id,
-                    approver_id: approver.userId,
-                    is_mandatory: approver.isMandatory,
-                    approval_stage: approval_stage
-                };
-
-                const approverResult = await helper.dynamicInsert('doc_approvers', approverData);
-                if (approverResult.status !== 'success') {
-                    return res.status(500).json({
-                        message: 'Failed to create approver setup',
-                        code: '500'
-                    });
+            if (stage.approvers && Array.isArray(stage.approvers) && stage.approvers.length > 0) {
+                for (const approver of stage.approvers) {
+                    if (approver.isMandatory) mandatory_approvers++;
+                    if (approver.userId) {
+                        await helper.dynamicInsert('doc_approvers', {
+                            doctype_id: doctype_id,
+                            approver_id: approver.userId,
+                            is_mandatory: approver.isMandatory ? 1 : 0,
+                            approval_stage: approval_stage
+                        }).catch(() => {});
+                    }
                 }
             }
 
@@ -172,20 +161,20 @@ const createApproverSetup = async (req, res) => {
                 stage_desc: stage_name,
                 number_of_approvers: num_of_approvers,
                 number_of_mandatory_approvers: mandatory_approvers,
-                quorum: quorum || stage.quorum_count || 1,
+                quorum: 1,
                 approvers: JSON.stringify(stage.approvers || []),
                 details: JSON.stringify(stages),
-                posted_by,
-                scope: stage.scope || 'BRANCH',
-                is_required: stage.isRequired || stage.is_required ? 1 : 0,
+                posted_by: posted_by || 1,
+                scope: approval_stage === 1 ? 'BRANCH' : 'HEAD_OFFICE',
+                is_required: approval_stage === 1 ? 1 : (stage.isRequired || stage.is_required ? 1 : 0),
                 threshold_amount: parseFloat(stage.threshold_amount || stage.threshold || 0),
-                quorum_count: parseInt(quorum || stage.quorum_count || 1)
+                quorum_count: 1
             };
 
             const setupResult = await helper.dynamicInsert('doc_approval_setups', setupData);
             if (setupResult.status !== 'success') {
                 return res.status(500).json({
-                    message: 'Failed to create approval setup',
+                    message: 'Failed to create approval setup stage',
                     code: '500'
                 });
             }
@@ -210,15 +199,11 @@ const createApproverSetup = async (req, res) => {
 
 /**
  * Updates an existing approver setup for a document type
- * @param {Object} req - Request object containing doctype_id and stages
- * @param {Object} res - Response object
- * @returns {Object} JSON response with update status
  */
 const updateApproverSetup = async (req, res) => {
     try {
         const { doctype_id, stages, posted_by } = req.body;
 
-        // Validate required fields
         if (!doctype_id || !stages) {
             return res.status(400).json({
                 message: 'document type and stages are required',
@@ -226,70 +211,51 @@ const updateApproverSetup = async (req, res) => {
             });
         }
 
-        // Delete existing approvers
-		data = {doctype_id: doctype_id}
+        const data = { doctype_id: doctype_id };
         await helper.deleteRecordsWithCondition('doc_approvers', [data]);
-
-        // Delete existing approval setups
         await helper.deleteRecordsWithCondition('doc_approval_setups', [data]);
 
         let approval_stage = 1;
 
-        // Loop through each stage
         for (const stage of stages) {
             const stage_name = stage.name;
-            const quorum = stage.quorum;
-            const number_of_approvers = stage.approvers ? stage.approvers.length : 0;
-            
-            // Count mandatory approvers
+            const num_of_approvers = stage.approvers ? stage.approvers.length : 0;
             let mandatory_approvers = 0;
-            
-            if (stage.approvers && Array.isArray(stage.approvers)) {
-                // Insert approvers for this stage
+
+            if (stage.approvers && Array.isArray(stage.approvers) && stage.approvers.length > 0) {
                 for (const approver of stage.approvers) {
-                    if (approver.isMandatory) {
-                        mandatory_approvers++;
-                    }
-
-                    // Insert into doc_approvers table
-                    const approverData = {
-                        doctype_id,
-                        approver_id: approver.userId,
-                        is_mandatory: approver.isMandatory,
-                        approval_stage
-                    };
-
-                    const approverResult = await helper.dynamicInsert('doc_approvers', approverData);
-                    if (approverResult.status !== 'success') {
-                        return res.status(500).json({
-                            message: 'Failed to update approver setup',
-                            code: '500'
-                        });
+                    if (approver.isMandatory) mandatory_approvers++;
+                    if (approver.userId) {
+                        await helper.dynamicInsert('doc_approvers', {
+                            doctype_id: doctype_id,
+                            approver_id: approver.userId,
+                            is_mandatory: approver.isMandatory ? 1 : 0,
+                            approval_stage: approval_stage
+                        }).catch(() => {});
                     }
                 }
             }
 
-            // Insert stage setup
             const setupData = {
-                doctype_id,
+                doctype_id: doctype_id,
+                approval_stage: approval_stage,
                 stage_desc: stage_name,
-                approval_stage,
-                number_of_approvers,
+                number_of_approvers: num_of_approvers,
                 number_of_mandatory_approvers: mandatory_approvers,
-                quorum: quorum || stage.quorum_count || 1,
+                quorum: 1,
                 approvers: JSON.stringify(stage.approvers || []),
                 details: JSON.stringify(stages),
-                posted_by,
-                scope: stage.scope || 'BRANCH',
-                is_required: stage.isRequired || stage.is_required ? 1 : 0,
+                posted_by: posted_by || 1,
+                scope: approval_stage === 1 ? 'BRANCH' : 'HEAD_OFFICE',
+                is_required: approval_stage === 1 ? 1 : (stage.isRequired || stage.is_required ? 1 : 0),
                 threshold_amount: parseFloat(stage.threshold_amount || stage.threshold || 0),
-                quorum_count: parseInt(quorum || stage.quorum_count || 1)
+                quorum_count: 1
             };
 
             const setupResult = await helper.dynamicInsert('doc_approval_setups', setupData);
             if (setupResult.status !== 'success') {
                 return res.status(500).json({
-                    message: 'Failed to update approval setup',
+                    message: 'Failed to update approval setup stage',
                     code: '500'
                 });
             }

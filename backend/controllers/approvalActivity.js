@@ -155,34 +155,35 @@ const getPendingDocs = async (req, res) => {
         ON rd.doctype_id = doctype_details.id
         AND doctype_details.code_id = 2
       LEFT JOIN users creator ON rd.posted_by = creator.id
-      INNER JOIN doc_approvers da 
-        ON da.doctype_id = rd.doctype_id
-        AND da.approval_stage = rd.approval_stage
-      INNER JOIN users u_current
-        ON u_current.id = ${userId}
+      INNER JOIN users u_current ON u_current.id = ${userId}
       WHERE 
-        da.approver_id = ${userId}
-        AND rd.status IN ('SUBMITTED', 'PENDING')
+        rd.status IN ('SUBMITTED', 'PENDING')
         AND NOT EXISTS (
-          SELECT 1 
-          FROM approval_activities aa 
-          WHERE aa.doc_id = rd.id 
-          AND aa.approved_by = ${userId}
-          AND aa.approval_stage = rd.approval_stage
+          SELECT 1 FROM approval_activities aa 
+          WHERE aa.doc_id = rd.id AND aa.approved_by = ${userId} AND aa.approval_stage = rd.approval_stage
         )
-        AND NOT EXISTS (
-          SELECT 1
-          FROM doc_approvers da_lower
-          JOIN users u_lower ON da_lower.approver_id = u_lower.id
-          WHERE da_lower.doctype_id = rd.doctype_id
-            AND da_lower.approval_stage = rd.approval_stage
-            AND u_lower.approval_limit < u_current.approval_limit
-            AND NOT EXISTS (
-              SELECT 1 FROM approval_activities aa_lower
-              WHERE aa_lower.doc_id = rd.id
-                AND aa_lower.approved_by = da_lower.approver_id
-                AND aa_lower.approval_stage = rd.approval_stage
+        AND (
+          /* Stage 1: Origination Branch Approvers */
+          (
+            rd.approval_stage = 1 
+            AND (
+              u_current.branch = rd.branch 
+              OR u_current.branch_id = rd.branch_id
+              OR (rd.branch IS NOT NULL AND u_current.branch LIKE CONCAT('%', rd.branch, '%'))
+              OR (u_current.branch IS NOT NULL AND rd.branch LIKE CONCAT('%', u_current.branch, '%'))
             )
+          )
+          OR
+          /* Stage 2+: Head Office Approvers (code 000 / HEAD OFFICE) */
+          (
+            rd.approval_stage > 1 
+            AND (
+              LOWER(u_current.branch) LIKE '%head office%' 
+              OR u_current.branch_id IN (101, 235, '000', '101', '235')
+              OR LOWER(u_current.role) = 'md'
+              OR LOWER(u_current.role) LIKE '%managing director%'
+            )
+          )
         )
       ORDER BY rd.id DESC`;
     }
