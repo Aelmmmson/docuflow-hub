@@ -40,7 +40,7 @@ export default function Settings() {
       {/* Header with Date/Time and Theme Toggle */}
       <PageHeader
         title="Settings"
-        description="Manage users, parameters, and system configurations"
+        description="Manage users, parameters, branch limits, and system configurations"
       />
 
       {/* Tabbed Interface */}

@@ -3,7 +3,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { Search, FileText, X, ExternalLink, AlertTriangle, UserX, Clock, AlertCircle } from "lucide-react";
+import { Search, FileText, X, ExternalLink, AlertTriangle, UserX, Clock, AlertCircle, Building } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -59,6 +59,8 @@ interface GenerateDocumentPayload {
   details: string;
   doc_id: string;
   user_id: number | undefined;
+  branch?: string;
+  branch_id?: string;
 }
 
 export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubmit }: DocumentFormProps) {
@@ -68,6 +70,8 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
   const [documentTypes, setDocumentTypes] = useState<DocType[]>([]);
   const [loadingTypes, setLoadingTypes] = useState(true);
   const [selectedDocType, setSelectedDocType] = useState<DocType | null>(null);
+  const [branches, setBranches] = useState<Array<{ id: string | number; description: string }>>([]);
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
 
   const [documentType, setDocumentType] = useState("");
   const [documentId, setDocumentId] = useState("");
@@ -159,8 +163,24 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
       }
     };
 
+    const fetchBranches = async () => {
+      try {
+        const res = await api.get("/get-parameters");
+        const list = res.data?.branches || res.data?.result?.branches || [];
+        setBranches(list);
+        if (currentUser?.branch?.id) {
+          setSelectedBranch(String(currentUser.branch.id));
+        } else if (list.length > 0) {
+          setSelectedBranch(String(list[0].id));
+        }
+      } catch (err) {
+        console.warn("Could not load branches:", err);
+      }
+    };
+
     fetchDocTypes();
     fetchBeneficiaries();
+    fetchBranches();
   }, [toast]);
 
   // Apply template
@@ -328,6 +348,7 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
     }
 
     try {
+      const selectedBranchObj = branches.find(b => String(b.id) === selectedBranch);
       // Prepare payload with proper typing
       const payload: GenerateDocumentPayload = {
         doctype_id: documentType,
@@ -336,7 +357,9 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
         user_id: currentUser?.user_id,
         customer_desc: "",
         requested_amount: null,
-        customer_number: null
+        customer_number: null,
+        branch: selectedBranchObj?.description || currentUser?.branch?.description || "Head Office (000)",
+        branch_id: selectedBranch || currentUser?.branch?.id || "101",
       };
 
       // Only include amount and customer number for transactional documents
@@ -507,44 +530,81 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
           </div>
         </div>
 
-        {/* Amount & Customer Number - Only show for transactional documents */}
+        {/* Originating Branch Selection Dropdown */}
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium flex items-center gap-1.5">
+            <Building className="h-3.5 w-3.5 text-primary" />
+            <span>Originating Branch</span> <span className="text-destructive">*</span>
+          </Label>
+          <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue placeholder="Select Originating Branch" />
+            </SelectTrigger>
+            <SelectContent>
+              {branches.map((b) => (
+                <SelectItem key={b.id} value={String(b.id)} className="text-xs">
+                  {b.description}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Transactional Fields: Requested Amount & Beneficiary Account Number side-by-side */}
         {isTransactionalDoc ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Requested Amount</Label>
-              <AmountInput
-                value={amount}
-                onValueChange={(rawValue) => setAmount(rawValue)}
-                placeholder="0.00"
-                className="h-9 text-xs"
-              />
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Requested Amount</Label>
+                <AmountInput
+                  value={amount}
+                  onValueChange={(rawValue) => setAmount(rawValue)}
+                  placeholder="0.00"
+                  className="h-9 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Beneficiary Account Number</Label>
+                <Select
+                  value={customerNumber}
+                  onValueChange={(val) => setCustomerNumber(val)}
+                >
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="Select beneficiary account..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {beneficiaries.map((b: any) => {
+                      const acct = String(b.account_number || b.accountNumber || "").trim();
+                      const name = String(b.beneficiary_name || b.name || "Beneficiary").trim();
+                      return (
+                        <SelectItem key={b.id || acct} value={acct}>
+                          {name} ({acct})
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Beneficiary Account Number</Label>
-              <Select
-                value={customerNumber}
-                onValueChange={(val) => setCustomerNumber(val)}
-              >
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="Select beneficiary account..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {beneficiaries.map((b: any) => {
-                    const acct = String(b.account_number || b.accountNumber || "").trim();
-                    const name = String(b.beneficiary_name || b.name || "Beneficiary").trim();
-                    return (
-                      <SelectItem key={b.id || acct} value={acct}>
-                        {name} ({acct})
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Real-time Over-limit Escalation Warning Banner */}
+            {currentUser?.branch?.approval_limit && (parseFloat(amount) || 0) > Number(currentUser.branch.approval_limit) && (
+              <Alert className="border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200 p-3.5 shadow-sm">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                <div className="space-y-1">
+                  <AlertTitle className="text-xs font-bold leading-tight text-amber-700 dark:text-amber-300">
+                    Escalation Alert: Amount Exceeds Branch Approval Limit
+                  </AlertTitle>
+                  <AlertDescription className="text-xs leading-normal">
+                    The requested amount of <span className="font-bold font-mono">{(parseFloat(amount) || 0).toLocaleString()}</span> exceeds your branch's limit of <span className="font-bold font-mono">{Number(currentUser.branch.approval_limit).toLocaleString()}</span>. Your local branch approvers will approve first, followed by escalation to the Head of Administration and Head Office executive tiers.
+                  </AlertDescription>
+                </div>
+              </Alert>
+            )}
           </div>
         ) : (
-          <div className="text-[10px] text-muted-foreground italic p-2 py-0 bg-muted/20 rounded-md text-center">
+          <div className="text-[10px] text-muted-foreground italic p-2 py-1.5 bg-muted/20 rounded-md text-center">
             Amount and Beneficiary Account Number fields are only available for transactional documents.
           </div>
         )}
@@ -583,7 +643,7 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
           documentType={documentType}
           documentDescription={details}
           scannedBy={currentUser ? `${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim() : "System User"}
-          branch={currentUser?.branch || "000"}
+          branch={currentUser?.branch?.id || "000"}
         />
 
         {/* Action Buttons */}

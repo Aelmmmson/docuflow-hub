@@ -67,9 +67,12 @@ interface User {
   last_name: string;
   email: string;
   phone?: string;
+  branch?: string;
+  branch_id?: number | string;
   status: "Active" | "Inactive"; // ← exact values backend sends
   role: string;
   signature?: string | null;
+  approval_limit?: number | string;
 }
 
 interface Role {
@@ -84,6 +87,7 @@ interface ApiEmployee {
   last_name: string;
   work_email: string;
   mobile_phone: string;
+  branch?: string;
 }
 
 export function UsersTab() {
@@ -92,6 +96,7 @@ export function UsersTab() {
 
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
+  const [branches, setBranches] = useState<Array<{ id: string | number; description: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -107,9 +112,12 @@ export function UsersTab() {
   const [selectedEmployee, setSelectedEmployee] = useState("");
   const [selectedRole, setSelectedRole] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("Active");
+  const [selectedUserBranch, setSelectedUserBranch] = useState<string>("");
   const [phone, setPhone] = useState("");
+  const [approvalLimit, setApprovalLimit] = useState<string>("0");
   const [signature, setSignature] = useState<string | null>(null);
   const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
+  const [unconfiguredUserModal, setUnconfiguredUserModal] = useState<User | null>(null);
 
   const { data: apiEmployees = [], isLoading: isLoadingEmployees } = useQuery({
     queryKey: ["employees"],
@@ -130,6 +138,12 @@ export function UsersTab() {
         const rolesRes = await api.get<{ results: Role[] }>("/get-users-roles");
         if (rolesRes.data.results) {
           setRoles(rolesRes.data.results);
+        }
+
+        // Branches from parameters
+        const paramsRes = await api.get("/get-parameters");
+        if (paramsRes.data?.branches) {
+          setBranches(paramsRes.data.branches);
         }
 
         // Users – no status remapping needed
@@ -207,7 +221,9 @@ export function UsersTab() {
     setSelectedEmployee("");
     setSelectedRole("");
     setSelectedStatus("Active");
+    setSelectedUserBranch("");
     setPhone("");
+    setApprovalLimit("0");
     setSignature(null);
     setIsAsideOpen(true);
   };
@@ -219,7 +235,9 @@ export function UsersTab() {
     const matchedRole = roles.find((r) => r.name.toLowerCase() === user.role?.toLowerCase());
     setSelectedRole(matchedRole ? matchedRole.name : user.role);
     setSelectedStatus(user.status);
+    setSelectedUserBranch(user.branch_id ? String(user.branch_id) : "");
     setPhone(user.phone || matched?.mobile_phone || "");
+    setApprovalLimit(user.approval_limit !== undefined && user.approval_limit !== null ? String(user.approval_limit) : "0");
     setSignature(user.signature || null);
     setIsAsideOpen(true);
   };
@@ -280,6 +298,9 @@ export function UsersTab() {
       }
     }
 
+    const parsedLimit = parseFloat(approvalLimit.replace(/,/g, "")) || 0;
+    const selectedBranchObj = branches.find((b) => String(b.id) === selectedUserBranch);
+
     const payload = {
       first_name: emp?.first_name || editingUser?.first_name || "",
       last_name: emp?.last_name || editingUser?.last_name || "Unknown",
@@ -287,7 +308,10 @@ export function UsersTab() {
       employee_id: emp?.employee_id || editingUser?.employee_id || "",
       phone: phone || emp?.mobile_phone || editingUser?.phone || "0240000000",
       role: selectedRole,
+      branch: selectedBranchObj?.description || editingUser?.branch || "",
+      branch_id: selectedUserBranch || editingUser?.branch_id || "",
       status: selectedStatus === "Active" ? "1" : "0",
+      approval_limit: parsedLimit,
       posted_by: currentUser?.user_id || 1,
       ...(isApprover && signature ? { signature } : {}),
     };
@@ -300,8 +324,11 @@ export function UsersTab() {
           last_name: editingUser.last_name,
           posted_by: currentUser?.user_id || 1,
           role: selectedRole,
+          branch: payload.branch,
+          branch_id: payload.branch_id,
           status: payload.status,
           phone: payload.phone,
+          approval_limit: parsedLimit,
           ...(isApprover && signature ? { signature } : {}),
         });
         toast({ title: "Success", description: "User updated successfully." });
@@ -382,6 +409,12 @@ export function UsersTab() {
       render: (u) => <span className="capitalize">{u.role}</span>
     },
     {
+      key: "branch",
+      header: "Branch",
+      render: (u) => <span>{u.branch || "N/A"}</span>,
+      hideOnMobile: true
+    },
+    {
       key: "status",
       header: "Status",
       render: (user) => <StatusBadge status={user.status} />,
@@ -389,44 +422,69 @@ export function UsersTab() {
     {
       key: "actions",
       header: "Actions",
-      className: "w-24 text-right",
-      render: (user) => (
-        <TooltipProvider delayDuration={200}>
-          <div className="flex items-center justify-end gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 text-muted-foreground hover:bg-primary hover:text-white transition-colors"
-                  onClick={() => handleView(user)}
-                >
-                  <Eye className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>View Details</p>
-              </TooltipContent>
-            </Tooltip>
+      className: "w-32 text-right",
+      render: (user) => {
+        const roleLower = user.role?.toLowerCase() || "";
+        const isApproverRole = roleLower === "approver" || roleLower === "admin" || roleLower === "md" || roleLower.includes("managing director");
+        const limitNum = Number(user.approval_limit || 0);
+        const isUnconfigured = isApproverRole && roleLower !== "md" && !roleLower.includes("managing director") && limitNum === 0;
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 text-muted-foreground hover:bg-primary hover:text-white transition-colors"
-                  onClick={() => handleEdit(user)}
-                >
-                  <Edit2 className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Edit User</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </TooltipProvider>
-      ),
+        return (
+          <TooltipProvider delayDuration={200}>
+            <div className="flex items-center justify-end gap-1">
+              {isUnconfigured && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-amber-600 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 border border-amber-300 dark:border-amber-800 transition-colors"
+                      onClick={() => setUnconfiguredUserModal(user)}
+                    >
+                      <AlertTriangle className="h-4 w-4 text-amber-500 animate-pulse" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Unconfigured Signing Limit (Click to resolve)</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-muted-foreground hover:bg-primary hover:text-white transition-colors"
+                    onClick={() => handleView(user)}
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>View Details</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-muted-foreground hover:bg-primary hover:text-white transition-colors"
+                    onClick={() => handleEdit(user)}
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Edit User</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
+        );
+      },
     },
   ];
 
@@ -646,6 +704,15 @@ export function UsersTab() {
                                 onSelect={() => {
                                   setSelectedEmployee(emp.id);
                                   setIsEmployeePopoverOpen(false);
+                                  if (emp.branch) {
+                                    const codeStr = String(emp.branch).trim();
+                                    const matched = branches.find(
+                                      (b) => b.description?.includes(`(${codeStr})`) || b.description === codeStr || String(b.id) === codeStr
+                                    );
+                                    if (matched) {
+                                      setSelectedUserBranch(String(matched.id));
+                                    }
+                                  }
                                 }}
                               >
                                 <div className="flex flex-col">
@@ -673,7 +740,12 @@ export function UsersTab() {
           {/* Role */}
           <div className="space-y-2">
             <Label htmlFor="role">Role *</Label>
-            <Select value={selectedRole} onValueChange={setSelectedRole}>
+            <Select value={selectedRole} onValueChange={(val) => {
+              setSelectedRole(val);
+              if (val.toLowerCase() === "md" || val.toLowerCase().includes("managing director")) {
+                setApprovalLimit("999999999");
+              }
+            }}>
               <SelectTrigger id="role">
                 <SelectValue placeholder="Select role" />
               </SelectTrigger>
@@ -686,6 +758,63 @@ export function UsersTab() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Branch (Only displayed after selecting an employee or when editing an existing user) */}
+          {(editingUser || selectedEmployee) && (
+            <div className="space-y-2">
+              <Label htmlFor="branch">Assigned Branch</Label>
+              <Select value={selectedUserBranch} onValueChange={setSelectedUserBranch}>
+                <SelectTrigger id="branch">
+                  <SelectValue placeholder="Select branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map((b) => (
+                    <SelectItem key={b.id} value={String(b.id)}>
+                      {b.description}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Approval Signing Limit (Only displayed when an Approver role is selected) */}
+          {(() => {
+            const roleLower = selectedRole.toLowerCase();
+            const isApproverRole = roleLower === "approver" || roleLower === "admin" || roleLower === "md" || roleLower.includes("managing director");
+
+            if (!isApproverRole) return null;
+
+            return (
+              <div className="space-y-2">
+                <Label htmlFor="approval-limit">Approval Signing Limit *</Label>
+                {roleLower === "md" || roleLower.includes("managing director") ? (
+                  <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-200 font-semibold flex items-center justify-between">
+                    <span>Managing Director (MD)</span>
+                    <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold">
+                      Unlimited Signing Limit
+                    </Badge>
+                  </div>
+                ) : (
+                  <div>
+                    <Input
+                      id="approval-limit"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="e.g. 50000.00"
+                      value={approvalLimit}
+                      onChange={(e) => setApprovalLimit(e.target.value)}
+                      className="font-medium text-sm"
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Individual signing authority limit required for document approvals.
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Approver Signature Upload (Approver Role Only) */}
           {isApprover && (
@@ -806,6 +935,11 @@ export function UsersTab() {
                 </div>
 
                 <div>
+                  <span className="block text-muted-foreground font-medium">Branch</span>
+                  <span className="font-semibold text-foreground">{viewingUser.branch || "N/A"}</span>
+                </div>
+
+                <div>
                   <span className="block text-muted-foreground font-medium">Phone</span>
                   <span className="font-semibold text-foreground">{viewingUser.phone || "N/A"}</span>
                 </div>
@@ -813,6 +947,21 @@ export function UsersTab() {
                 <div>
                   <span className="block text-muted-foreground font-medium">User ID</span>
                   <span className="font-semibold text-foreground">#{viewingUser.id}</span>
+                </div>
+
+                <div>
+                  <span className="block text-muted-foreground font-medium">Signing Limit</span>
+                  <span className="font-semibold text-foreground">
+                    {(() => {
+                      const roleLower = viewingUser.role?.toLowerCase() || "";
+                      const isApproverRole = roleLower === "approver" || roleLower === "admin" || roleLower === "md" || roleLower.includes("managing director");
+                      if (!isApproverRole) return "N/A";
+                      const limitNum = Number(viewingUser.approval_limit || 0);
+                      if (roleLower === "md" || roleLower.includes("managing director") || limitNum >= 900000000) return "Unlimited (MD)";
+                      if (limitNum === 0) return "Unconfigured";
+                      return limitNum.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    })()}
+                  </span>
                 </div>
               </div>
             </div>
@@ -940,6 +1089,71 @@ export function UsersTab() {
             </Button>
             <Button size="sm" className="text-xs bg-amber-600 hover:bg-amber-700 text-white font-semibold" onClick={() => executeSave(true)}>
               Proceed & Remove from Setups
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─────────────────────────────────────────────────────────────
+          3. UNCONFIGURED APPROVAL LIMIT WARNING MODAL
+         ───────────────────────────────────────────────────────────── */}
+      <Dialog open={unconfiguredUserModal !== null} onOpenChange={(open) => !open && setUnconfiguredUserModal(null)}>
+        <DialogContent className="max-w-md rounded-2xl border-amber-300 dark:border-amber-800 bg-card">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-base">
+              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+              Unconfigured Approval Limit
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground pt-1">
+              User profile setup requires an assigned signing limit.
+            </DialogDescription>
+          </DialogHeader>
+
+          {unconfiguredUserModal && (
+            <div className="space-y-4 py-2">
+              <div className="p-3.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-foreground text-sm">
+                    {toTitleCase(`${unconfiguredUserModal.first_name} ${unconfiguredUserModal.last_name}`)}
+                  </span>
+                  <Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-800 border-amber-300">
+                    ID: {unconfiguredUserModal.employee_id}
+                  </Badge>
+                </div>
+                <p className="text-muted-foreground text-[11px]">
+                  Email: <strong>{unconfiguredUserModal.email}</strong> • Role: <strong className="capitalize">{unconfiguredUserModal.role}</strong>
+                </p>
+                <div className="pt-1 text-amber-900 dark:text-amber-200 text-xs">
+                  <p className="font-semibold">Required Action:</p>
+                  <ul className="list-disc list-inside mt-1 space-y-1 text-[11px] text-amber-800 dark:text-amber-300">
+                    <li>Set <strong>Approval Signing Limit</strong> (e.g. 10,000.00 or 50,000.00)</li>
+                    <li>Verify role assignment and approver signature if applicable</li>
+                  </ul>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-muted-foreground italic">
+                Without a configured signing limit, document approvals will default to escalation or bypass this user.
+              </p>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" size="sm" className="text-xs" onClick={() => setUnconfiguredUserModal(null)}>
+              Close
+            </Button>
+            <Button
+              size="sm"
+              className="text-xs bg-primary hover:bg-primary/90 text-white font-semibold"
+              onClick={() => {
+                if (unconfiguredUserModal) {
+                  const targetUser = unconfiguredUserModal;
+                  setUnconfiguredUserModal(null);
+                  handleEdit(targetUser);
+                }
+              }}
+            >
+              Update User Limit Now
             </Button>
           </DialogFooter>
         </DialogContent>

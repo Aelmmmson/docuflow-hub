@@ -26,6 +26,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Switch } from "@/components/ui/switch";
 import { SearchFilter } from "@/components/shared/SearchFilter";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { RightAside } from "@/components/shared/RightAside";
@@ -39,6 +40,9 @@ interface ApprovalStage {
   quorum: number;
   approvers: string[];
   mandatoryApprovers: string[];
+  scope: "BRANCH" | "HEAD_OFFICE";
+  isRequired: boolean;
+  thresholdAmount: number;
 }
 
 interface DocumentType {
@@ -57,6 +61,11 @@ interface ApprovalSetup {
   details: string | Array<{
     name: string;
     quorum: string;
+    scope?: "BRANCH" | "HEAD_OFFICE";
+    isRequired?: boolean;
+    is_required?: boolean;
+    thresholdAmount?: number;
+    threshold_amount?: number;
     approvers: Array<{
       userId: number;
       name: string;
@@ -88,6 +97,7 @@ export function ApprovalSetupTab() {
   const [documentType, setDocumentType] = useState("");
   const [availableDocumentTypes, setAvailableDocumentTypes] = useState<DocumentType[]>([]);
   const [numberOfStages, setNumberOfStages] = useState(1);
+  const [numberOfStagesInput, setNumberOfStagesInput] = useState<string>("1");
   const [stages, setStages] = useState<ApprovalStage[]>([]);
 
   const [availableApprovers, setAvailableApprovers] = useState<ApproverOption[]>([]);
@@ -97,11 +107,14 @@ export function ApprovalSetupTab() {
   );
 
   const initializeStages = (count: number) => {
-    const newStages: ApprovalStage[] = Array.from({ length: count }, () => ({
+    const newStages: ApprovalStage[] = Array.from({ length: count }, (_, idx) => ({
       name: "",
       quorum: 1,
       approvers: [],
       mandatoryApprovers: [],
+      scope: idx === 0 ? "BRANCH" : "HEAD_OFFICE",
+      isRequired: idx === 0, // default Stage 1 as required
+      thresholdAmount: 0,
     }));
     setStages(newStages);
   };
@@ -111,7 +124,8 @@ export function ApprovalSetupTab() {
     setCurrentStep(0);
     setDocumentType("");
     setNumberOfStages(1);
-    setStages([{ name: "", quorum: 1, approvers: [], mandatoryApprovers: [] }]);
+    setNumberOfStagesInput("1");
+    initializeStages(1);
     setIsAsideOpen(true);
   };
 
@@ -120,10 +134,16 @@ export function ApprovalSetupTab() {
     setCurrentStep(0);
     setDocumentType(setup.doctype_id.toString());
     setNumberOfStages(setup.approval_stages);
+    setNumberOfStagesInput(setup.approval_stages.toString());
 
     let parsedDetails: Array<{
       name: string;
       quorum: string;
+      scope?: "BRANCH" | "HEAD_OFFICE";
+      isRequired?: boolean;
+      is_required?: boolean;
+      thresholdAmount?: number;
+      threshold_amount?: number;
       approvers: Array<{ userId: number; name: string; isMandatory: boolean }>;
     }> = [];
 
@@ -137,13 +157,16 @@ export function ApprovalSetupTab() {
       console.error("Failed to parse approval stages details:", parseErr);
     }
 
-    const transformedStages: ApprovalStage[] = parsedDetails.map((detail) => ({
+    const transformedStages: ApprovalStage[] = parsedDetails.map((detail, idx) => ({
       name: detail.name || "",
       quorum: Number(detail.quorum) || 1,
       approvers: detail.approvers?.map((a) => a.name) ?? [],
       mandatoryApprovers: detail.approvers
         ?.filter((a) => a.isMandatory)
         .map((a) => a.name) ?? [],
+      scope: detail.scope || (idx === 0 ? "BRANCH" : "HEAD_OFFICE"),
+      isRequired: detail.isRequired !== undefined ? Boolean(detail.isRequired) : detail.is_required !== undefined ? Boolean(detail.is_required) : (idx === 0),
+      thresholdAmount: Number(detail.thresholdAmount || detail.threshold_amount) || (idx + 1) * 10000,
     }));
 
     setStages(transformedStages);
@@ -189,22 +212,6 @@ export function ApprovalSetupTab() {
         });
         return;
       }
-      if (stage.quorum > stage.approvers.length) {
-        toast({
-          title: "Validation Error",
-          description: "Quorum cannot exceed the number of approvers.",
-          variant: "destructive",
-        });
-        return;
-      }
-      if (stage.mandatoryApprovers.length > stage.quorum) {
-        toast({
-          title: "Validation Error",
-          description: "Mandatory approvers cannot exceed the quorum number.",
-          variant: "destructive",
-        });
-        return;
-      }
     }
 
     setCurrentStep((prev) => Math.min(prev + 1, numberOfStages));
@@ -226,27 +233,20 @@ export function ApprovalSetupTab() {
       return;
     }
 
-    if (lastStage.mandatoryApprovers.length > lastStage.quorum) {
-      toast({
-        title: "Validation Error",
-        description: "Mandatory approvers cannot exceed the quorum number.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     const payload = {
       posted_by: currentUser?.user_id || 1,
       doctype_id: documentType,
-      stages: stages.map((stage) => ({
+      stages: stages.map((stage, idx) => ({
         name: stage.name,
-        quorum: stage.quorum.toString(),
+        scope: idx === 0 ? "BRANCH" : "HEAD_OFFICE",
+        isRequired: idx === 0 ? true : stage.isRequired,
+        threshold_amount: 0,
         approvers: stage.approvers.map((approverName) => {
           const approver = availableApprovers.find((a) => a.name === approverName);
           return {
             userId: approver ? Number(approver.userId) : 0,
             name: approverName,
-            isMandatory: stage.mandatoryApprovers.includes(approverName),
+            isMandatory: false,
           };
         }),
       })),
@@ -523,28 +523,50 @@ export function ApprovalSetupTab() {
                   type="number"
                   min={1}
                   max={10}
-                  value={numberOfStages}
+                  value={numberOfStagesInput}
                   onChange={(e) => {
-                    const val = Math.min(10, Math.max(1, parseInt(e.target.value) || 1));
-                    setNumberOfStages(val);
+                    const raw = e.target.value;
+                    setNumberOfStagesInput(raw);
 
-                    if (editingSetup) {
-                      setStages((prevStages) => {
-                        if (val > prevStages.length) {
-                          const newStages = Array.from({ length: val - prevStages.length }, () => ({
-                            name: "",
-                            quorum: 1,
-                            approvers: [],
-                            mandatoryApprovers: [],
-                          }));
-                          return [...prevStages, ...newStages];
-                        } else if (val < prevStages.length) {
-                          return prevStages.slice(0, val);
-                        }
-                        return prevStages;
-                      });
+                    if (raw === "") return;
+
+                    const parsed = parseInt(raw, 10);
+                    if (!isNaN(parsed)) {
+                      const val = Math.min(10, Math.max(1, parsed));
+                      setNumberOfStages(val);
+
+                      if (editingSetup) {
+                        setStages((prevStages) => {
+                          if (val > prevStages.length) {
+                            const newStages = Array.from({ length: val - prevStages.length }, (_, idx) => ({
+                              name: "",
+                              quorum: 1,
+                              approvers: [],
+                              mandatoryApprovers: [],
+                              scope: "HEAD_OFFICE" as const,
+                              isRequired: false,
+                              thresholdAmount: 0,
+                            }));
+                            return [...prevStages, ...newStages];
+                          } else if (val < prevStages.length) {
+                            return prevStages.slice(0, val);
+                          }
+                          return prevStages;
+                        });
+                      } else {
+                        initializeStages(val);
+                      }
+                    }
+                  }}
+                  onBlur={() => {
+                    if (numberOfStagesInput === "" || isNaN(parseInt(numberOfStagesInput, 10)) || parseInt(numberOfStagesInput, 10) < 1) {
+                      setNumberOfStagesInput("1");
+                      setNumberOfStages(1);
+                      if (!editingSetup) initializeStages(1);
                     } else {
-                      initializeStages(val);
+                      const clamped = Math.min(10, Math.max(1, parseInt(numberOfStagesInput, 10)));
+                      setNumberOfStagesInput(clamped.toString());
+                      setNumberOfStages(clamped);
                     }
                   }}
                   className="h-9"
@@ -574,41 +596,42 @@ export function ApprovalSetupTab() {
                   id="stageName"
                   value={stages[currentStep - 1].name}
                   onChange={(e) => updateStage(currentStep - 1, { name: e.target.value })}
-                  placeholder="e.g., Manager Review"
-                  className="h-9"
+                  placeholder={currentStep === 1 ? "e.g., Branch Operations Review" : `e.g., Head Office Tier ${currentStep - 1} Approval`}
+                  className="h-9 font-medium"
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="quorum" className="text-xs font-medium">
-                  Quorum (minimum approvals required) <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="quorum"
-                  type="number"
-                  min={1}
-                  max={stages[currentStep - 1].approvers.length || 10}
-                  value={stages[currentStep - 1].quorum}
-                  onChange={(e) => {
-                    const val = Math.max(1, parseInt(e.target.value) || 1);
-                    const stage = stages[currentStep - 1];
-                    if (val < stage.mandatoryApprovers.length) {
-                      updateStage(currentStep - 1, {
-                        quorum: val,
-                        mandatoryApprovers: stage.mandatoryApprovers.slice(0, val),
-                      });
-                    } else {
-                      updateStage(currentStep - 1, { quorum: val });
-                    }
-                  }}
-                  className="h-9"
-                />
-                {stages[currentStep - 1].quorum > stages[currentStep - 1].approvers.length &&
-                  stages[currentStep - 1].approvers.length > 0 && (
-                    <p className="text-[10px] text-destructive">
-                      Quorum cannot exceed number of selected approvers
+              {/* Universal isRequired Toggle Card */}
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <Label htmlFor="stage-is-required" className="text-xs font-bold text-foreground cursor-pointer">
+                        Mandatory Stage (isRequired)
+                      </Label>
+                      {currentStep === 1 && (
+                        <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30 font-semibold">
+                          Compulsory for Stage 1
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      {currentStep === 1
+                        ? "Stage 1 is compulsory and all documents must originate through this stage."
+                        : "If enabled, documents MUST stop for approval at this stage regardless of amount."}
                     </p>
-                  )}
+                  </div>
+                  <Switch
+                    id="stage-is-required"
+                    checked={currentStep === 1 ? true : stages[currentStep - 1].isRequired}
+                    disabled={currentStep === 1}
+                    onCheckedChange={(checked) => {
+                      if (currentStep > 1) {
+                        updateStage(currentStep - 1, { isRequired: checked });
+                      }
+                    }}
+                  />
+                </div>
               </div>
 
               {/* Select Approvers */}
@@ -825,6 +848,11 @@ export function ApprovalSetupTab() {
                 let detailsArray: Array<{
                   name: string;
                   quorum: string;
+                  scope?: string;
+                  isRequired?: boolean;
+                  is_required?: boolean;
+                  thresholdAmount?: number;
+                  threshold_amount?: number;
                   approvers: Array<{ userId: number; name: string; isMandatory: boolean }>;
                 }> = [];
 
@@ -838,31 +866,52 @@ export function ApprovalSetupTab() {
                   console.error("Error parsing details for view:", parseErr);
                 }
 
-                return detailsArray.map((stage, index) => (
-                  <div key={index} className="rounded-lg border border-border p-3 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
-                        {index + 1}
-                      </div>
-                      <span className="text-xs font-medium">{stage.name}</span>
-                    </div>
-                    <div className="pl-8 space-y-1">
-                      <p className="text-[10px] text-muted-foreground">Quorum: {stage.quorum}</p>
-                      <div className="flex flex-wrap gap-1">
-                        {stage.approvers.map((approver) => (
-                          <Badge
-                            key={approver.userId}
-                            variant={approver.isMandatory ? "default" : "secondary"}
-                            className="text-[10px] capitalize"
-                          >
-                            {approver.name}
-                            {approver.isMandatory && " *"}
+                return detailsArray.map((stage, index) => {
+                  const isReq = stage.isRequired || stage.is_required;
+                  const scp = stage.scope || (index === 0 ? "BRANCH" : "HEAD_OFFICE");
+                  const thresh = stage.thresholdAmount || stage.threshold_amount;
+
+                  return (
+                    <div key={index} className="rounded-lg border border-border p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+                            {index + 1}
+                          </div>
+                          <span className="text-xs font-semibold">{stage.name}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Badge variant="outline" className="text-[10px] font-mono">
+                            {scp}
                           </Badge>
-                        ))}
+                          {isReq && (
+                            <Badge variant="destructive" className="text-[10px]">
+                              Mandatory
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="pl-8 space-y-1">
+                        <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-mono">
+                          <span>Quorum: {stage.quorum}</span>
+                          {thresh !== undefined && <span>Threshold: GHS {Number(thresh).toLocaleString()}</span>}
+                        </div>
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {stage.approvers.map((approver) => (
+                            <Badge
+                              key={approver.userId}
+                              variant={approver.isMandatory ? "default" : "secondary"}
+                              className="text-[10px] capitalize"
+                            >
+                              {approver.name}
+                              {approver.isMandatory && " *"}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ));
+                  );
+                });
               })()}
             </div>
           </div>

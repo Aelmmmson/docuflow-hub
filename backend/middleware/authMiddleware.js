@@ -67,7 +67,9 @@ const handleRefreshToken = async (req, res) => {
             }
 
             const email = decoded.email;
-            const query = `SELECT u.id AS user_id, u.first_name, u.last_name, u.employee_id, u.email, u.signature, r.id AS role_id, r.name AS role_name 
+            const query = `SELECT u.id AS user_id, u.first_name, u.last_name, u.employee_id, u.email, u.signature, 
+                                 COALESCE(u.branch_id, u.branch, '101') AS branch_id, COALESCE(u.branch, 'Head Office (000)') AS branch_name,
+                                 r.id AS role_id, r.name AS role_name 
                           FROM users u 
                           JOIN model_has_roles m ON u.id = m.model_id 
                           JOIN roles r ON r.id = m.role_id 
@@ -76,8 +78,19 @@ const handleRefreshToken = async (req, res) => {
             const userDetails = await helper.selectRecordsWithQuery(query, [email]);
 
             if (userDetails.status === "success" && userDetails.data && userDetails.data.length > 0) {
+                const userData = userDetails.data[0];
+                const limitQuery = `SELECT approval_limit FROM branch_approval_limits WHERE branch_id = ? LIMIT 1`;
+                const limitRes = await helper.selectRecordsWithQuery(limitQuery, [String(userData.branch_id || '101')]).catch(() => null);
+                const limitVal = (limitRes && limitRes.data && limitRes.data.length > 0) ? parseFloat(limitRes.data[0].approval_limit) : 50000;
+
+                userData.branch = {
+                    id: String(userData.branch_id || '101'),
+                    description: userData.branch_name || 'Head Office (000)',
+                    approval_limit: limitVal
+                };
+
                 const accessToken = jwt.sign({ email }, process.env.ACCESS_TOKEN_SECRET || "access_secret", { expiresIn: "60m" });
-                return res.status(200).json({ accessToken, user: userDetails.data, code: "200" });
+                return res.status(200).json({ accessToken, user: [userData], code: "200" });
             } else {
                 return res.status(403).json({ error: "Forbidden - User not found", code: "403" });
             }

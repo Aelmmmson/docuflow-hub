@@ -6,6 +6,12 @@ const USER_KEY = "current_user";
 
 import api from "./api"; // Add this import for refresh call
 
+export interface BranchInfo {
+  id: string;
+  description: string;
+  approval_limit: number;
+}
+
 export interface AuthUser {
   user_id: number;
   first_name: string;
@@ -16,7 +22,31 @@ export interface AuthUser {
   role_name: string;
   signature?: string;
   phone?: string;
-  branch?: string;
+  branch?: BranchInfo | null;
+}
+
+export function mapUserResponse(rawUserData: any): AuthUser {
+  const userObj = Array.isArray(rawUserData) ? rawUserData[0] : rawUserData;
+  let branchData: BranchInfo | null = null;
+  if (userObj?.branch && typeof userObj.branch === 'object') {
+    branchData = {
+      id: String(userObj.branch.id || '000'),
+      description: String(userObj.branch.description || 'Head Office (000)'),
+      approval_limit: Number(userObj.branch.approval_limit || 0)
+    };
+  } else if (userObj?.branch_id || userObj?.branch) {
+    branchData = {
+      id: String(userObj.branch_id || '000'),
+      description: String(userObj.branch_name || userObj.branch || 'Head Office (000)'),
+      approval_limit: 0
+    };
+  }
+  return {
+    ...userObj,
+    user_id: Number(userObj.user_id || userObj.id || 0),
+    employee_id: String(userObj.employee_id || userObj.employee || ''),
+    branch: branchData
+  };
 }
 
 // Check if user is authenticated (based on real token presence)
@@ -43,9 +73,12 @@ export function isAuthenticated(): boolean {
 // Refresh access token using backend endpoint
 export async function refreshAccessToken(): Promise<boolean> {
   try {
-    const res = await api.get<{ accessToken: string }>("/user/refresh-token");
+    const res = await api.get<{ accessToken: string; user?: any }>("/user/refresh-token");
     if (res.data.accessToken) {
       localStorage.setItem(TOKEN_KEY, res.data.accessToken);
+      if (res.data.user) {
+        setCurrentUser(mapUserResponse(res.data.user));
+      }
       return true;
     }
     logout();

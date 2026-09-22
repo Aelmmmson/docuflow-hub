@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import axios from "axios";
-import { login, isAuthenticated } from "@/lib/auth";
+import { login, isAuthenticated, mapUserResponse } from "@/lib/auth";
 import { getXAuthInitiateUrl } from "@/lib/xauth";
 
 // API configuration – relative path (uses Vite proxy)
@@ -363,7 +363,7 @@ export default function Login() {
       }
 
       // Save real token + user data using the updated auth helper
-      login(accessToken, user[0]);
+      login(accessToken, mapUserResponse(user[0]));
 
       console.log("[LOGIN] Auth state saved successfully");
       console.log("[LOGIN] Navigating to:", from);
@@ -637,35 +637,9 @@ export default function Login() {
 
           <form onSubmit={handleForgotPassword} className="space-y-4 pt-2">
             {forgotMessage && (
-              <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-medium border border-emerald-200 flex items-center justify-between gap-2">
-                <span className="flex-1 break-words">{forgotMessage}</span>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="h-7 px-2 text-xs flex items-center gap-1 shrink-0 bg-white dark:bg-slate-900 border-emerald-300 hover:bg-emerald-100 hover:text-black"
-                  onClick={() => {
-                    navigator.clipboard.writeText(forgotMessage);
-                    setCopiedResetMsg(true);
-                    toast({
-                      title: "Copied to Clipboard",
-                      description: "Password reset details copied.",
-                    });
-                    setTimeout(() => setCopiedResetMsg(false), 2500);
-                  }}
-                >
-                  {copiedResetMsg ? (
-                    <>
-                      <Check className="h-3.5 w-3.5 text-emerald-600" />
-                      Copied
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-3.5 w-3.5 text-emerald-600" />
-                      Copy
-                    </>
-                  )}
-                </Button>
+              <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-medium border border-emerald-200 flex items-start gap-2.5">
+                <Check className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
+                <span className="flex-1 leading-relaxed">{forgotMessage}</span>
               </div>
             )}
 

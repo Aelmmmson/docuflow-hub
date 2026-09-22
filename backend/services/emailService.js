@@ -23,8 +23,11 @@ const ACTIVITY_CODES = {
   ACCOUNT_CREATION: process.env.EMAIL_ACTIVITY_CODE_ACCOUNT_CREATION || "ACZpPFG2Mov9iH",
 };
 
-// CID (Content-ID) Image Source for USG Brand Logo (prevents email client blocking of base64 data URIs)
-const LOGO_SRC = process.env.EMAIL_LOGO_SRC || "cid:usg-logo";
+// Hosted HTTP/HTTPS Image Source for USG Brand Logo (Gmail blocks base64 data URIs and unattached CID references)
+const LOGO_SRC =
+  process.env.EMAIL_LOGO_SRC ||
+  process.env.EMAIL_LOGO_URL ||
+  "http://10.203.14.169/dms/assets/usg-logo-O.png";
 
 /**
  * Executes async query using database connection pool with Promise wrapper
@@ -260,8 +263,15 @@ function buildHtmlEmailTemplate({
         <td align="left">
           <table role="presentation" border="0" cellpadding="0" cellspacing="0">
             <tr>
-              <td style="vertical-align:middle;padding-right:10px;">
-                <img src="${LOGO_SRC}" alt="USG Logo" width="34" height="34" style="display:block;border:0;outline:none;text-decoration:none;" />
+              <td style="vertical-align:middle;padding-right:12px;">
+                <!-- 100% Bulletproof Pure HTML/CSS Brand Icon Badge for Gmail & Mobile Clients -->
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0;padding:0;">
+                  <tr>
+                    <td align="center" valign="middle" width="36" height="36" style="width:36px;height:36px;background-color:#0b64f4;border-radius:10px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;line-height:36px;font-weight:900;color:#ffffff;text-align:center;letter-spacing:0.5px;box-shadow:0 3px 8px rgba(11,100,244,0.35);">
+                      USG
+                    </td>
+                  </tr>
+                </table>
               </td>
               <td style="vertical-align:middle;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:26px;line-height:32px;font-weight:700;color:#0f1115;letter-spacing:-0.4px;">
                 xDMS

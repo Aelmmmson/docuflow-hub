@@ -293,7 +293,7 @@ export function Scanner({
           <Printer className="h-6 w-6" />
         </div>
         <h4 className="text-xs font-semibold text-foreground mb-1">
-          Scan Document via TWAIN Scanner
+          Scan Document via Scanner
         </h4>
         <p className="text-[11px] text-muted-foreground text-center max-w-sm mb-4">
           Connect your desktop scanner device to acquire multi-page document scans directly into PDF format.

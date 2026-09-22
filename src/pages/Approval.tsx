@@ -798,6 +798,24 @@ export default function Approval() {
                 </span>
               </div>
             )}
+            <div className="flex justify-between">
+              <span className="text-xs text-muted-foreground font-semibold">Originating Branch</span>
+              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                {(viewingDoc as any).branch || (viewingDoc as any).branch_name || "Tema Branch"}
+              </span>
+            </div>
+            {(viewingDoc as any).routing_reason === "ESCALATED_ABOVE_BRANCH_LIMIT" && (
+              <Alert className="border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200 p-3 shadow-sm my-2">
+                <div className="space-y-1">
+                  <div className="text-[11px] font-bold text-amber-700 dark:text-amber-300">
+                    🚩 Escalated Above Branch Approval Limit
+                  </div>
+                  <div className="text-[11px] leading-tight">
+                    Requested amount (GHS {parseFloat(viewingDoc.requested_amount || "0").toLocaleString()}) exceeds Tema Branch's limit (GHS 50,000). Branch approval is complete. You are approving as Head of Administration / HO Tier (stage {viewingDoc.approval_stage}).
+                  </div>
+                </div>
+              </Alert>
+            )}
             {viewingDoc.requested_amount && (
               <div className="flex justify-between">
                 <span className="text-xs text-muted-foreground">Requested Amount</span>

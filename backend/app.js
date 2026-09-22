@@ -21,6 +21,11 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: false }));
 app.use(cookieParser());
 
+const path = require("path");
+
+// Serve public static assets (brand logos, email images)
+app.use("/v1/api/dms/assets", express.static(path.join(__dirname, "public")));
+
 //base route for the app
 // console.log("API URL:", "/v1/api/dms");
 app.use("/v1/api/dms", require("./routes/routes"));

@@ -10,6 +10,7 @@ const dashboardController = require("../controllers/dashboard.js");
 const accountController = require("../controllers/accountSetup.js");
 const documentController = require("../controllers/document.js");
 const beneficiaryController = require("../controllers/beneficiarySetup.js");
+const branchLimitsController = require("../controllers/branchLimitsController.js");
 
 const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage() }); // Set the destination folder for uploaded files
@@ -57,7 +58,8 @@ router.get("/get-doc-types", parameterController.getDoctypes);
 router.get("/get-available-doc-types", parameterController.getAvailableDoctypes);
 router.get("/get-doctype-with-approval-setup", parameterController.getDoctypesWithApprovalSetups);
 router.post("/add-doc-type", parameterController.addDoctype);
-router.put("/update-doc-type", parameterController.updateDoctype);
+router.get("/get-branch-approval-limits", branchLimitsController.getBranchApprovalLimits);
+router.put("/update-branch-approval-limit", branchLimitsController.updateBranchApprovalLimit);
 
 //approver setups
 router.get("/get-approver-setups", approverSetupController.getApproverSetups);

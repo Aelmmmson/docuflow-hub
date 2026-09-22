@@ -158,6 +158,8 @@ const getPendingDocs = async (req, res) => {
       INNER JOIN doc_approvers da 
         ON da.doctype_id = rd.doctype_id
         AND da.approval_stage = rd.approval_stage
+      INNER JOIN users u_current
+        ON u_current.id = ${userId}
       WHERE 
         da.approver_id = ${userId}
         AND rd.status IN ('SUBMITTED', 'PENDING')
@@ -168,23 +170,19 @@ const getPendingDocs = async (req, res) => {
           AND aa.approved_by = ${userId}
           AND aa.approval_stage = rd.approval_stage
         )
-        AND (
-          /* Mandatory approvers can act whenever stage is active */
-          da.is_mandatory = 1
-          OR 
-          /* Optional approvers can ONLY act if no mandatory approvers are left AND optional approvals are required for quorum */
-          (
-            da.is_mandatory = 0 
-            AND rd.is_required_approvers_left = 0
-            AND (
-              SELECT (das.quorum - (
-                SELECT COUNT(*) FROM doc_approvers 
-                WHERE doctype_id = rd.doctype_id AND approval_stage = rd.approval_stage AND is_mandatory = 1
-              ))
-              FROM doc_approval_setups das
-              WHERE das.doctype_id = rd.doctype_id AND das.approval_stage = rd.approval_stage
-            ) > 0
-          )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM doc_approvers da_lower
+          JOIN users u_lower ON da_lower.approver_id = u_lower.id
+          WHERE da_lower.doctype_id = rd.doctype_id
+            AND da_lower.approval_stage = rd.approval_stage
+            AND u_lower.approval_limit < u_current.approval_limit
+            AND NOT EXISTS (
+              SELECT 1 FROM approval_activities aa_lower
+              WHERE aa_lower.doc_id = rd.id
+                AND aa_lower.approved_by = da_lower.approver_id
+                AND aa_lower.approval_stage = rd.approval_stage
+            )
         )
       ORDER BY rd.id DESC`;
     }
@@ -390,16 +388,33 @@ const approveDoc = async (req, res) => {
           }
         }
 
+        // Fetch approving user's signing limit & role
+        const getUserLimitQuery = `
+          SELECT u.approval_limit, r.name as role_name
+          FROM users u
+          LEFT JOIN model_has_roles mhr ON u.id = mhr.model_id
+          LEFT JOIN roles r ON mhr.role_id = r.id
+          WHERE u.id = ?`;
+        const userLimitRes = await helper.selectRecordsWithQuery(getUserLimitQuery, [userId]);
+        const signingUser = userLimitRes.data?.[0];
+        const userLimit = parseFloat(signingUser?.approval_limit || 0);
+        const isMD = signingUser?.role_name?.toLowerCase() === 'md' ||
+                     signingUser?.role_name?.toLowerCase()?.includes('managing director') ||
+                     userLimit >= 900000000;
+
+        const docReqAmount = parseFloat(requested_amount || document.requested_amount || 0);
+        const hasSufficientLimitToFinalize = isMD || (userLimit > 0 && docReqAmount <= userLimit);
+
         //increment the approval stage if the required number of approvers have approved the document
         console.log("countApprovedApprovers", countApprovedApprovers + 1);
         console.log("quorum", quorum);
 
         const willCompleteStage = (countApprovedApprovers + 1) >= quorum;
         console.log("willCompleteStage", willCompleteStage);
-        const newApprovalStage = willCompleteStage ? approvalStage + 1 : approvalStage; //if the stage is complete, increment the stage
-        const current_approvers = willCompleteStage ? 0 : current_approvals + 1; //if the stage is complete, reset the current approvers to 0
-        isRequiredApproversLeft = willCompleteStage ? 0 : isRequiredApproversLeft; //if the stage is complete, reset the isRequiredApproversLeft to 0
-        const isFullyApproved = newApprovalStage > max_approval_level;
+        const newApprovalStage = (willCompleteStage || hasSufficientLimitToFinalize) ? approvalStage + 1 : approvalStage;
+        const current_approvers = willCompleteStage ? 0 : current_approvals + 1;
+        isRequiredApproversLeft = willCompleteStage ? 0 : isRequiredApproversLeft;
+        const isFullyApproved = hasSufficientLimitToFinalize || (newApprovalStage > max_approval_level);
         const newStatus = isFullyApproved ? 'APPROVED' : 'PENDING';
 
         // Add this query before calculating willCompleteStage

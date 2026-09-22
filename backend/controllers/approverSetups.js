@@ -64,8 +64,9 @@ const getApproverSetups = async (req, res) => {
 
 //returns all users with approver role
 const getApproverUsers = async (req, res) => {
-    //get all approvers
-    const query = `SELECT users.id as userId,concat(users.first_name," ",users.last_name) as name,roles.name as role,
+    const { branch_id, scope } = req.query;
+    let query = `SELECT users.id as userId, concat(users.first_name, " ", users.last_name) as name, roles.name as role,
+        roles.name as role_name, COALESCE(users.branch_id, users.branch) as branch_id, users.branch as branch_name,
         CASE 
         WHEN users.status = 1 THEN 'Active'
         WHEN users.status = 0 THEN 'Inactive'
@@ -75,8 +76,15 @@ const getApproverUsers = async (req, res) => {
         JOIN model_has_roles ON users.id = model_has_roles.model_id
         JOIN roles ON model_has_roles.role_id = roles.id 
         WHERE (LOWER(roles.name) LIKE '%approver%' OR LOWER(roles.name) = 'approver')
-          AND (users.status = 1 OR users.status = '1' OR users.status = 'Active') 
-        ORDER BY users.first_name ASC`;
+          AND (users.status = 1 OR users.status = '1' OR users.status = 'Active')`;
+
+    const queryParams = [];
+    if (branch_id && scope !== 'HEAD_OFFICE') {
+        query += ` AND (users.branch_id = ? OR users.branch = ?)`;
+        queryParams.push(String(branch_id), String(branch_id));
+    }
+
+    query += ` ORDER BY users.first_name ASC`;
 
     // Get a connection from the pool
     pool.getConnection((err, connection) => {
@@ -87,14 +95,13 @@ const getApproverUsers = async (req, res) => {
         }
 
         // Execute the query
-        connection.query(query, (err, results) => {
+        connection.query(query, queryParams, (err, results) => {
             if (err) {
                 console.error("Error executing query: ", err);
                 res.status(500).json({ error: "Query execution failed." });
             } else {
-                // console.log("Query successful: ", results);
                 res.status(200).json({
-                    approvers: results,
+                    approvers: results || [],
                     code: "200",
                 });
             }
@@ -165,10 +172,14 @@ const createApproverSetup = async (req, res) => {
                 stage_desc: stage_name,
                 number_of_approvers: num_of_approvers,
                 number_of_mandatory_approvers: mandatory_approvers,
-                quorum: quorum,
-                approvers: JSON.stringify(stage.approvers),
+                quorum: quorum || stage.quorum_count || 1,
+                approvers: JSON.stringify(stage.approvers || []),
                 details: JSON.stringify(stages),
-                posted_by
+                posted_by,
+                scope: stage.scope || 'BRANCH',
+                is_required: stage.isRequired || stage.is_required ? 1 : 0,
+                threshold_amount: parseFloat(stage.threshold_amount || stage.threshold || 0),
+                quorum_count: parseInt(quorum || stage.quorum_count || 1)
             };
 
             const setupResult = await helper.dynamicInsert('doc_approval_setups', setupData);
@@ -228,31 +239,33 @@ const updateApproverSetup = async (req, res) => {
         for (const stage of stages) {
             const stage_name = stage.name;
             const quorum = stage.quorum;
-            const number_of_approvers = stage.approvers.length;
+            const number_of_approvers = stage.approvers ? stage.approvers.length : 0;
             
             // Count mandatory approvers
             let mandatory_approvers = 0;
             
-            // Insert approvers for this stage
-            for (const approver of stage.approvers) {
-                if (approver.isMandatory) {
-                    mandatory_approvers++;
-                }
+            if (stage.approvers && Array.isArray(stage.approvers)) {
+                // Insert approvers for this stage
+                for (const approver of stage.approvers) {
+                    if (approver.isMandatory) {
+                        mandatory_approvers++;
+                    }
 
-                // Insert into doc_approvers table
-                const approverData = {
-                    doctype_id,
-                    approver_id: approver.userId,
-                    is_mandatory: approver.isMandatory,
-                    approval_stage
-                };
+                    // Insert into doc_approvers table
+                    const approverData = {
+                        doctype_id,
+                        approver_id: approver.userId,
+                        is_mandatory: approver.isMandatory,
+                        approval_stage
+                    };
 
-                const approverResult = await helper.dynamicInsert('doc_approvers', approverData);
-                if (approverResult.status !== 'success') {
-                    return res.status(500).json({
-                        message: 'Failed to update approver setup',
-                        code: '500'
-                    });
+                    const approverResult = await helper.dynamicInsert('doc_approvers', approverData);
+                    if (approverResult.status !== 'success') {
+                        return res.status(500).json({
+                            message: 'Failed to update approver setup',
+                            code: '500'
+                        });
+                    }
                 }
             }
 
@@ -263,10 +276,14 @@ const updateApproverSetup = async (req, res) => {
                 approval_stage,
                 number_of_approvers,
                 number_of_mandatory_approvers: mandatory_approvers,
-                quorum,
-                approvers: JSON.stringify(stage.approvers),
+                quorum: quorum || stage.quorum_count || 1,
+                approvers: JSON.stringify(stage.approvers || []),
                 details: JSON.stringify(stages),
-                posted_by
+                posted_by,
+                scope: stage.scope || 'BRANCH',
+                is_required: stage.isRequired || stage.is_required ? 1 : 0,
+                threshold_amount: parseFloat(stage.threshold_amount || stage.threshold || 0),
+                quorum_count: parseInt(quorum || stage.quorum_count || 1)
             };
 
             const setupResult = await helper.dynamicInsert('doc_approval_setups', setupData);

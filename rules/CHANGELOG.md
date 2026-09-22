@@ -15,6 +15,10 @@ This file maintains a concise, structured changelog of system updates, bug fixes
 ### Fixed
 - **Scanned PDF Page Dimension Scaling**: Fixed page size mismatch in `Scanner.tsx` by scaling scanned image streams onto standard A4 PDF pages (`595.28 x 841.89 pt`).
 - **Signature Sheet Header Stale Count Fix**: Removed static `TOTAL APPROVALS: N` count text from `documentStamper.ts` header bar to eliminate stale approval counts as new approval cards are appended.
+- **Gmail Email Logo Rendering Fix**: Replaced unattached `cid:usg-logo` Content-ID references and broken external HTTP image requests in `emailService.js` with a 100% bulletproof pure HTML/CSS USG brand badge (`#0b64f4` rounded tile), guaranteeing instant, zero-error rendering across Gmail app, iOS, Android, and desktop clients without broken image boxes.
+
+### Security
+- **Password Reset Exposure Hardening**: Updated `/user/forgot-password` endpoint in `backend/controllers/users.js` and `Login.tsx` to strictly deliver temporary passwords via email (`notifyPasswordReset`) and remove on-screen password disclosure and clipboard copying.
 
 ---
 

@@ -33,7 +33,7 @@ require("dotenv").config();
 const register = async (req, res) => {
 	try {
 		// Access and validate data from the request body
-		const { employee_id, first_name, last_name, email, rank, phone, status, role, posted_by, signature } = req.body;
+		const { employee_id, first_name, last_name, email, rank, phone, status, role, posted_by, signature, approval_limit, branch, branch_id } = req.body;
 
 		// Pass data entry into array
 		const dataEntry = [
@@ -89,6 +89,9 @@ const register = async (req, res) => {
 			password: hashedPassword,
 			posted_by,
 			status,
+			branch: branch || null,
+			branch_id: branch_id || null,
+			approval_limit: approval_limit !== undefined ? approval_limit : 0,
 			signature: signature || null
 		};
 
@@ -180,11 +183,21 @@ const login = async (req, res) => {
 				const result = await bcrypt.compare(password, userPassowrd);
 				if (result) {
 
-					const query = `SELECT u.id AS user_id,u.first_name,u.last_name,u.employee_id,u.email,u.signature,r.id AS role_id,r.name AS role_name FROM users u JOIN model_has_roles m ON u.id = m.model_id JOIN roles r ON r.id = m.role_id WHERE u.email = '${email}';`
+					const query = `SELECT u.id AS user_id, u.first_name, u.last_name, u.employee_id, u.email, u.signature, COALESCE(u.branch_id, u.branch, '101') AS branch_id, COALESCE(u.branch, 'Head Office (000)') AS branch_name, r.id AS role_id, r.name AS role_name FROM users u JOIN model_has_roles m ON u.id = m.model_id JOIN roles r ON r.id = m.role_id WHERE u.email = '${email}';`
 
 					const userDetails = await helper.selectRecordsWithQuery(query);
 
-					if(userDetails.status === "success"){
+					if(userDetails.status === "success" && userDetails.data && userDetails.data.length > 0){
+						const userData = userDetails.data[0];
+						const limitQuery = `SELECT approval_limit FROM branch_approval_limits WHERE branch_id = ? LIMIT 1`;
+						const limitRes = await helper.selectRecordsWithQuery(limitQuery, [String(userData.branch_id || '101')]).catch(() => null);
+						const limitVal = (limitRes && limitRes.data && limitRes.data.length > 0) ? parseFloat(limitRes.data[0].approval_limit) : 50000;
+
+						userData.branch = {
+							id: String(userData.branch_id || '101'),
+							description: userData.branch_name || 'Head Office (000)',
+							approval_limit: limitVal
+						};
 
 						//generate token
 						const accessToken = jwt.sign({ email: email }, process.env.ACCESS_TOKEN_SECRET || "access_secret", { expiresIn: "60m" });
@@ -209,7 +222,7 @@ const login = async (req, res) => {
 
 						res.status(200).json({
 							result: "User authenticated successfully",
-							user: userDetails.data,
+							user: [userData],
 							accessToken: accessToken,
 							code: "200"
 						});
@@ -272,9 +285,48 @@ const logout = async (req, res) => {
 	}
 }
 
+const syncEmployeeBranchesFromHr = async () => {
+	try {
+		const axios = require("axios");
+		const hrRes = await axios.get("http://10.203.14.169/hr/api/employees_rest.php", { timeout: 4000 });
+		if (Array.isArray(hrRes.data) && hrRes.data.length > 0) {
+			const empMap = new Map();
+			hrRes.data.forEach((e) => {
+				if (e.employee_id) empMap.set(String(e.employee_id).trim(), e);
+				if (e.work_email) empMap.set(String(e.work_email).toLowerCase().trim(), e);
+			});
+
+			const dbUsers = await helper.selectRecordsWithQuery("SELECT id, employee_id, email, branch, branch_id FROM users");
+			if (dbUsers.status === "success" && Array.isArray(dbUsers.data)) {
+				const branchesRes = await helper.selectRecordsWithCondition("code_creation_details", [{ code_id: "1" }]);
+				const masterBranches = (branchesRes && branchesRes.status === "success" && branchesRes.data) ? branchesRes.data : [];
+
+				for (const u of dbUsers.data) {
+					const hrEmp = empMap.get(String(u.employee_id).trim()) || empMap.get(String(u.email || "").toLowerCase().trim());
+					if (hrEmp && hrEmp.branch) {
+						const hrBranchCode = String(hrEmp.branch).trim();
+						const matchedBranch = masterBranches.find(b => b.description && (b.description.includes(`(${hrBranchCode})`) || b.description.includes(hrBranchCode)));
+						const newBranchDesc = matchedBranch ? matchedBranch.description : `Branch (${hrBranchCode})`;
+						const newBranchId = matchedBranch ? String(matchedBranch.id) : hrBranchCode;
+
+						if (u.branch !== newBranchDesc || String(u.branch_id || "") !== newBranchId) {
+							await helper.dynamicUpdateWithId(usersCollection, { branch: newBranchDesc, branch_id: newBranchId }, u.id).catch(() => {});
+						}
+					}
+				}
+			}
+		}
+	} catch (err) {
+		// Silent non-blocking fallback
+	}
+};
+
 //handles getting all users
 const getUsers = async (req, res) => {
 	try {
+		// Asynchronously sync employee branch transfers from HR REST API
+		syncEmployeeBranchesFromHr().catch(() => {});
+
 		// Query to get all users with their roles and formatted status
 		const query = `
 			SELECT u.*, r.name as role,
@@ -397,7 +449,7 @@ const deactivateUser = async (req, res) => {
 const updateUser = async(req,res) =>{
 	try{
 		// Access and validate data from the request body
-		const { employee_id, first_name, last_name, email, rank, phone, status, role, posted_by, signature } = req.body;
+		const { employee_id, first_name, last_name, email, rank, phone, status, role, posted_by, signature, approval_limit, branch, branch_id } = req.body;
 
 		// Pass data entry into array
 		const dataEntry = [
@@ -421,6 +473,9 @@ const updateUser = async(req,res) =>{
 				last_name,
 				posted_by,
 				status,
+				...(branch !== undefined ? { branch } : {}),
+				...(branch_id !== undefined ? { branch_id } : {}),
+				...(approval_limit !== undefined ? { approval_limit } : {}),
 				...(signature !== undefined && signature !== null && signature !== "" ? { signature } : {})
 			};
 
@@ -795,7 +850,11 @@ const forgotPassword = async (req, res) => {
 		const userQuery = await helper.selectRecordsWithQuery(query, [emailOrStaffId, emailOrStaffId]);
 
 		if (userQuery.status !== "success" || !userQuery.data || userQuery.data.length === 0) {
-			return res.status(404).json({ result: "No account found with provided Email or Staff ID", code: "404" });
+			// Generic message to prevent user enumeration
+			return res.status(200).json({
+				result: "If an account matches that Email or Staff ID, a password reset email has been sent. Please check your inbox.",
+				code: "200"
+			});
 		}
 
 		const user = userQuery.data[0];
@@ -808,18 +867,18 @@ const forgotPassword = async (req, res) => {
 				email: user.email,
 				recipientName: `${user.first_name || ""} ${user.last_name || ""}`.trim() || "User",
 				newPassword: passwordToSet,
-				message: `Your password reset request has been processed. Your temporary password is set to: <strong>${passwordToSet}</strong>.`
+				message: `Your password reset request has been processed. Your temporary password is set to: <strong>${passwordToSet}</strong>. Please log in and change your password immediately.`
 			}).catch((err) => console.error("Forgot password email notification failed:", err));
 
 			return res.status(200).json({
-				result: `Password reset successfully. Default password is set to: ${passwordToSet}`,
+				result: "Password reset email sent successfully. Please check your email inbox for your new temporary password to log in.",
 				code: "200"
 			});
 		} else {
 			return res.status(400).json({ result: "Could not reset password", code: "400" });
 		}
 	} catch (error) {
-		console.error("Error in forgot password:", error);
+		console.error("Error resetting password:", error);
 		return res.status(500).json({ result: "An error occurred", code: "500" });
 	}
 };

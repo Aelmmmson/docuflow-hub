@@ -22,7 +22,7 @@ require("dotenv").config();
 //generate a document
 const generateDoc = async (req,res) => {
     try  {
-        const {doctype_id,requested_amount,customer_number,customer_desc,details,doc_id,user_id} = req.body;
+        const {doctype_id,requested_amount,customer_number,customer_desc,details,doc_id,user_id,branch: reqBranch,branch_id: reqBranchId} = req.body;
 
         //pass data entry into array
         const dataEntry = [
@@ -44,6 +44,24 @@ const generateDoc = async (req,res) => {
                 return res.status(409).json({ result: isUnique.message, code: "409" });
             }
 
+            // Derive branch from request payload or staff record
+            const userQuery = `SELECT id, COALESCE(branch_id, branch, '101') AS branch_id, COALESCE(branch, 'Head Office (000)') AS branch_name FROM users WHERE id = ? OR employee_id = ? LIMIT 1`;
+            const userRes = await helper.selectRecordsWithQuery(userQuery, [user_id, user_id]);
+            const userBranchId = reqBranchId || ((userRes && userRes.data && userRes.data.length > 0) ? String(userRes.data[0].branch_id) : '101');
+            const userBranchName = reqBranch || ((userRes && userRes.data && userRes.data.length > 0) ? String(userRes.data[0].branch_name) : 'Head Office (000)');
+
+            // Fetch branch approval limit
+            const limitQuery = `SELECT approval_limit FROM branch_approval_limits WHERE branch_id = ? LIMIT 1`;
+            const limitRes = await helper.selectRecordsWithQuery(limitQuery, [userBranchId]).catch(() => null);
+            const hasConfiguredLimit = limitRes && limitRes.data && limitRes.data.length > 0 && limitRes.data[0].approval_limit !== null && limitRes.data[0].approval_limit !== undefined;
+            const branchLimit = hasConfiguredLimit ? parseFloat(limitRes.data[0].approval_limit) : null;
+
+            const amountVal = parseFloat(requested_amount) || 0;
+            const isEscalated = branchLimit !== null && amountVal > branchLimit;
+            const routingReason = branchLimit === null 
+                ? "BRANCH_LIMIT_UNCONFIGURED" 
+                : (isEscalated ? "ESCALATED_ABOVE_BRANCH_LIMIT" : "WITHIN_BRANCH_LIMIT");
+
             const data = {
                 doctype_id: doctype_id,
                 requested_amount: requested_amount || null,
@@ -52,7 +70,10 @@ const generateDoc = async (req,res) => {
                 details: details,
                 doc_id: doc_id,
                 posted_by: user_id,
-                branch: "000",
+                branch: userBranchName,
+                branch_id: userBranchId,
+                routing_reason: routingReason,
+                ceiling_exceeded: 0,
                 is_transaction_failed: 0,
                 status: "DRAFT",
                 created_at: new Date()
@@ -61,7 +82,7 @@ const generateDoc = async (req,res) => {
             //insert data into the database
             const insertDoc = await helper.dynamicInsert(documentCollection, data);
             if(insertDoc.status === "success") {
-                res.status(201).json({ result: "Document generated successfully", code: "201" });
+                res.status(201).json({ result: "Document generated successfully", code: "201", branch_id: userBranchId, routing_reason: routingReason });
             }else{
                 console.log("Error:",insertDoc.message);
                 res.status(400).json({ result: insertDoc.message, code: "400" });
