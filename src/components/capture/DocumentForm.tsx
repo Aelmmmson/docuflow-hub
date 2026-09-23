@@ -30,7 +30,7 @@ import { useToast } from "@/hooks/use-toast";
 import api from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
 import { FileUpload } from "./FileUpload";
-import { toTitleCase } from "@/lib/utils";
+import { toTitleCase, cn } from "@/lib/utils";
 import { AmountInput } from "@/components/ui/amount-input";
 
 interface DocType {
@@ -133,6 +133,21 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
     }
   };
 
+  // Strict HR API User Branch resolution (No fallbacks allowed)
+  const userBranchObj = currentUser?.branch;
+  const userBranchName = typeof userBranchObj === "string" 
+    ? userBranchObj 
+    : (userBranchObj?.description || "");
+  const userBranchId = typeof userBranchObj === "object" && userBranchObj?.id 
+    ? String(userBranchObj.id) 
+    : (currentUser?.branch_id ? String(currentUser.branch_id) : "");
+
+  const hasUserBranch = Boolean(
+    userBranchName && 
+    userBranchName.trim() !== "" && 
+    userBranchName.toLowerCase() !== "null"
+  );
+
   // Fetch document types & beneficiaries
   useEffect(() => {
     const fetchDocTypes = async () => {
@@ -170,11 +185,11 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
         setBranches(list);
         if (currentUser?.branch?.id) {
           setSelectedBranch(String(currentUser.branch.id));
-        } else if (list.length > 0) {
-          setSelectedBranch(String(list[0].id));
+        } else {
+          setSelectedBranch("");
         }
       } catch (err) {
-        console.warn("Could not load branches:", err);
+        console.warn("Could not load branches from HR API:", err);
       }
     };
 
@@ -334,6 +349,10 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
   };
 
   const handleSaveDraft = async () => {
+    if (!hasUserBranch) {
+      toast({ title: "Action Disallowed", description: "Document draft creation is disallowed: Your account has no valid branch assigned from HR API.", variant: "destructive" });
+      return;
+    }
     if (!documentType) {
       toast({ title: "Error", description: "Document type is required.", variant: "destructive" });
       return;
@@ -348,8 +367,7 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
     }
 
     try {
-      const selectedBranchObj = branches.find(b => String(b.id) === selectedBranch);
-      // Prepare payload with proper typing
+      // Prepare payload with strict HR API branch data (no fallbacks)
       const payload: GenerateDocumentPayload = {
         doctype_id: documentType,
         details: details.trim(),
@@ -358,8 +376,8 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
         customer_desc: "",
         requested_amount: null,
         customer_number: null,
-        branch: selectedBranchObj?.description || currentUser?.branch?.description || "Head Office (000)",
-        branch_id: selectedBranch || currentUser?.branch?.id || "101",
+        branch: userBranchName,
+        branch_id: userBranchId,
       };
 
       // Only include amount and customer number for transactional documents
@@ -436,6 +454,20 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
   return (
     <>
       <div className="space-y-6">
+        {!hasUserBranch && (
+          <Alert variant="destructive" className="border-destructive/40 bg-destructive/10 text-destructive p-3.5 shadow-sm">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-destructive mt-0.5" />
+            <div className="space-y-1">
+              <AlertTitle className="text-xs font-bold leading-tight">
+                Branch Data Unavailable from HR API
+              </AlertTitle>
+              <AlertDescription className="text-xs leading-normal">
+                Your employee account has no assigned branch from the HR API or the HR API branch service is currently unavailable. Document origination, file upload, and draft saving are strictly disallowed.
+              </AlertDescription>
+            </div>
+          </Alert>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Document Type */}
           <div className="space-y-1.5">
@@ -445,7 +477,7 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
             {loadingTypes ? (
               <div className="text-xs text-muted-foreground animate-pulse">Loading types...</div>
             ) : (
-              <Select value={documentType} onValueChange={handleDocumentTypeChange}>
+              <Select value={documentType} onValueChange={handleDocumentTypeChange} disabled={!hasUserBranch}>
                 <SelectTrigger className="h-9 text-xs">
                   <SelectValue placeholder="Select Document Type" />
                 </SelectTrigger>
@@ -530,24 +562,21 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
           </div>
         </div>
 
-        {/* Originating Branch (Read-Only / Non-Editable) */}
+        {/* Originating Branch (Read-Only / Live HR API Branch) */}
         <div className="space-y-1.5">
           <Label className="text-xs font-medium flex items-center gap-1.5">
             <Building className="h-3.5 w-3.5 text-primary" />
             <span>Originating Branch</span> <span className="text-destructive">*</span>
           </Label>
-          <div className="p-2.5 rounded-lg border border-border bg-muted/40 flex items-center justify-between">
-            <span className="text-xs font-semibold text-foreground">
-              {(() => {
-                const bObj = branches.find((b) => String(b.id) === String(selectedBranch) || (b.code && String(b.code) === String(selectedBranch)));
-                if (bObj?.description) return bObj.description;
-                if (typeof currentUser?.branch === "string") return currentUser.branch;
-                if (currentUser?.branch && typeof currentUser.branch === "object") return (currentUser.branch as any).description || "Head Office (000)";
-                return "Head Office (000)";
-              })()}
+          <div className={cn(
+            "p-2.5 rounded-lg border flex items-center justify-between",
+            hasUserBranch ? "border-border bg-muted/40" : "border-destructive/40 bg-destructive/5"
+          )}>
+            <span className={cn("text-xs font-semibold", hasUserBranch ? "text-foreground" : "text-destructive")}>
+              {hasUserBranch ? userBranchName : "No Branch Assigned (HR API Unavailable)"}
             </span>
-            <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20 font-medium">
-              Originator Branch
+            <Badge variant="outline" className={cn("text-[10px] font-medium", hasUserBranch ? "bg-primary/10 text-primary border-primary/20" : "bg-destructive/10 text-destructive border-destructive/20")}>
+              {hasUserBranch ? "Originator Branch" : "Branch Unavailable"}
             </Badge>
           </div>
         </div>
@@ -563,31 +592,9 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
                   onValueChange={(rawValue) => setAmount(rawValue)}
                   placeholder="0.00"
                   className="h-9 text-xs"
+                  disabled={!hasUserBranch}
                 />
               </div>
-
-              {/* <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Beneficiary Account Number</Label>
-                <Select
-                  value={customerNumber}
-                  onValueChange={(val) => setCustomerNumber(val)}
-                >
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Select beneficiary account..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {beneficiaries.map((b: any) => {
-                      const acct = String(b.account_number || b.accountNumber || "").trim();
-                      const name = String(b.beneficiary_name || b.name || "Beneficiary").trim();
-                      return (
-                        <SelectItem key={b.id || acct} value={acct}>
-                          {name} ({acct})
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div> */}
             </div>
 
             {/* Real-time Over-limit Escalation Warning Banner */}
@@ -621,6 +628,7 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
             onChange={(e) => setDetails(e.target.value)}
             placeholder="Enter document details..."
             className="min-h-[80px] text-xs resize-none"
+            disabled={!hasUserBranch}
           />
         </div>
 
@@ -640,22 +648,23 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
           onView={handleViewFile}
           onRemove={handleRemoveFile}
           documentId={documentId}
-          disabled={uploading}
+          disabled={uploading || !hasUserBranch}
           showDocumentId={true}
           documentType={documentType}
           documentDescription={details}
           scannedBy={currentUser ? `${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim() : "System User"}
-          branch={currentUser?.branch?.id || "000"}
+          branch={userBranchId}
         />
 
         {/* Action Buttons */}
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={handleClear}>
-            Clears
+            Clear
           </Button>
           <Button
             onClick={handleSaveDraft}
             disabled={
+              !hasUserBranch ||
               !documentId || 
               !documentType || 
               !details.trim() || 

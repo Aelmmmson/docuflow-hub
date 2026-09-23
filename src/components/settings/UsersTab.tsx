@@ -303,6 +303,26 @@ export function UsersTab() {
       return false;
     }
 
+    // HR API Branch enforcement — STRICTLY DISALLOW creation/edit if HR API has no branch data
+    const selectedEmpObjForValidation = apiEmployees.find(
+      (e) =>
+        e.id === selectedEmployee ||
+        (editingUser &&
+          ((e.employee_id && String(e.employee_id).toLowerCase() === String(editingUser.employee_id).toLowerCase()) ||
+            (e.work_email && editingUser.email && e.work_email.toLowerCase() === editingUser.email.toLowerCase())))
+    );
+    const apiBranchValueForValidation = selectedEmpObjForValidation?.branch || (editingUser?.branch && editingUser.branch !== "N/A" ? editingUser.branch : "");
+    const hasApiBranchForValidation = Boolean(apiBranchValueForValidation && String(apiBranchValueForValidation).trim() !== "" && String(apiBranchValueForValidation).trim() !== "null" && String(apiBranchValueForValidation).trim() !== "N/A");
+
+    if (!hasApiBranchForValidation) {
+      toast({
+        title: "Action Disallowed",
+        description: "Cannot save user: HR API did not return branch information for this employee.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
     if (!selectedRole) {
       toast({
         title: "Validation Error",
@@ -858,8 +878,8 @@ export function UsersTab() {
                   ((e.employee_id && String(e.employee_id).toLowerCase() === String(editingUser.employee_id).toLowerCase()) ||
                     (e.work_email && editingUser.email && e.work_email.toLowerCase() === editingUser.email.toLowerCase())))
             );
-            const apiBranchValue = selectedEmpObj?.branch || "";
-            const hasApiBranch = Boolean(apiBranchValue && String(apiBranchValue).trim() !== "" && String(apiBranchValue).trim() !== "null");
+            const apiBranchValue = selectedEmpObj?.branch || (editingUser?.branch && editingUser.branch !== "N/A" ? editingUser.branch : "");
+            const hasApiBranch = Boolean(apiBranchValue && String(apiBranchValue).trim() !== "" && String(apiBranchValue).trim() !== "null" && String(apiBranchValue).trim() !== "N/A");
 
             return (
               <div className="space-y-2">
@@ -870,23 +890,29 @@ export function UsersTab() {
                       Auto-Populated from HR API
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 font-normal border-amber-200 dark:border-amber-800">
-                      Manual Selection Required (No HR API Branch)
+                    <Badge variant="outline" className="text-[10px] bg-destructive/10 text-destructive font-normal border-destructive/20">
+                      HR API Branch Unavailable
                     </Badge>
                   )}
                 </div>
-                <Select value={selectedUserBranch} onValueChange={setSelectedUserBranch} disabled={hasApiBranch}>
-                  <SelectTrigger id="branch" className={cn(hasApiBranch && "bg-muted/60 opacity-80 cursor-not-allowed")}>
-                    <SelectValue placeholder="Select branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {branches.map((b) => (
-                      <SelectItem key={b.id} value={String(b.id)}>
-                        {b.description}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {hasApiBranch ? (
+                  <Input
+                    id="branch"
+                    value={apiBranchValue}
+                    disabled
+                    className="bg-muted/60 font-medium text-xs cursor-not-allowed text-foreground opacity-90"
+                  />
+                ) : (
+                  <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-xs space-y-1">
+                    <div className="font-semibold flex items-center gap-1.5">
+                      <AlertCircle className="w-4 h-4 text-destructive" />
+                      <span>Branch Unavailable from HR API</span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed">
+                      The HR API did not return branch information for this employee. User creation and editing is strictly disallowed until valid branch data is provided by the HR API.
+                    </p>
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -1026,10 +1052,25 @@ export function UsersTab() {
           </div>
 
           <div className="pt-4">
-            <Button onClick={handleSave} className="w-full" disabled={loading}>
-              <UserPlus className="h-4 w-4 mr-2" />
-              {editingUser ? "Update User" : "Save User"}
-            </Button>
+            {(() => {
+              const selectedEmpObjBtn = apiEmployees.find(
+                (e) =>
+                  e.id === selectedEmployee ||
+                  (editingUser &&
+                    ((e.employee_id && String(e.employee_id).toLowerCase() === String(editingUser.employee_id).toLowerCase()) ||
+                      (e.work_email && editingUser.email && e.work_email.toLowerCase() === editingUser.email.toLowerCase())))
+              );
+              const apiBranchValueBtn = selectedEmpObjBtn?.branch || (editingUser?.branch && editingUser.branch !== "N/A" ? editingUser.branch : "");
+              const hasApiBranchBtn = Boolean(apiBranchValueBtn && String(apiBranchValueBtn).trim() !== "" && String(apiBranchValueBtn).trim() !== "null" && String(apiBranchValueBtn).trim() !== "N/A");
+              const isSaveDisabled = loading || (Boolean(selectedEmployee || editingUser) && !hasApiBranchBtn);
+
+              return (
+                <Button onClick={handleSave} className="w-full" disabled={isSaveDisabled}>
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  {editingUser ? "Update User" : "Save User"}
+                </Button>
+              );
+            })()}
           </div>
         </div>
       </RightAside>

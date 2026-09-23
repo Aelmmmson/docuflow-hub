@@ -68,7 +68,6 @@ const handleRefreshToken = async (req, res) => {
 
             const email = decoded.email;
             const query = `SELECT u.id AS user_id, u.first_name, u.last_name, u.employee_id, u.email, u.signature, 
-                                 COALESCE(u.branch_id, u.branch, '101') AS branch_id, COALESCE(u.branch, 'Head Office (000)') AS branch_name,
                                  r.id AS role_id, r.name AS role_name 
                           FROM users u 
                           JOIN model_has_roles m ON u.id = m.model_id 
@@ -79,15 +78,67 @@ const handleRefreshToken = async (req, res) => {
 
             if (userDetails.status === "success" && userDetails.data && userDetails.data.length > 0) {
                 const userData = userDetails.data[0];
-                const limitQuery = `SELECT approval_limit FROM branch_approval_limits WHERE branch_id = ? LIMIT 1`;
-                const limitRes = await helper.selectRecordsWithQuery(limitQuery, [String(userData.branch_id || '101')]).catch(() => null);
-                const limitVal = (limitRes && limitRes.data && limitRes.data.length > 0) ? parseFloat(limitRes.data[0].approval_limit) : 50000;
 
-                userData.branch = {
-                    id: String(userData.branch_id || '101'),
-                    description: userData.branch_name || 'Head Office (000)',
-                    approval_limit: limitVal
-                };
+                const axios = require("axios");
+                const headers = { "x-api-key": process.env.HR_MOBILE_API_KEY || "81780c52fe24634d0ab7164a6e7a74c908da568a906111db" };
+
+                let masterBranches = [];
+                let allEmployees = [];
+                try {
+                    const hrBranchRes = await axios.get("http://10.203.14.114:3099/v1/api/hr/me/branches", { headers, timeout: 5000 });
+                    masterBranches = hrBranchRes.data?.data?.branches || [];
+
+                    let page = 1;
+                    let totalPages = 1;
+                    do {
+                        const empRes = await axios.get(`http://10.203.14.114:3099/v1/api/hr/me/employees?limit=200&page=${page}`, { headers, timeout: 5000 });
+                        const data = empRes.data?.data;
+                        if (data && Array.isArray(data.employees)) {
+                            allEmployees.push(...data.employees);
+                            totalPages = data.pages || 1;
+                        }
+                        page++;
+                    } while (page <= totalPages);
+                } catch (hrErr) {
+                    console.error("[HR API FAILURE in handleRefreshToken]:", hrErr.message);
+                    return res.status(503).json({ error: "HR API Service Unavailable", code: "503" });
+                }
+
+                const hrEmp = allEmployees.find((e) =>
+                    (e.employeeCode && String(e.employeeCode).trim().toLowerCase() === String(userData.employee_id).trim().toLowerCase()) ||
+                    (e.workEmail && String(e.workEmail).trim().toLowerCase() === String(userData.email).trim().toLowerCase()) ||
+                    (e.email && String(e.email).trim().toLowerCase() === String(userData.email).trim().toLowerCase())
+                );
+
+                const rawBranchVal = hrEmp?.branch || hrEmp?.branchCode;
+                let matchedBranch = null;
+                if (rawBranchVal && Array.isArray(masterBranches)) {
+                    const str = String(rawBranchVal).trim();
+                    const padded = str.padStart(3, '0');
+                    matchedBranch = masterBranches.find(b => 
+                        String(b.id).trim() === str || 
+                        String(b.code).trim() === str || 
+                        String(b.code).trim() === padded ||
+                        b.name.toLowerCase().includes(str.toLowerCase()) ||
+                        (b.description && b.description.toLowerCase().includes(str.toLowerCase()))
+                    );
+                }
+
+                if (matchedBranch) {
+                    const limitQuery = `SELECT approval_limit FROM branch_approval_limits WHERE branch_id = ? LIMIT 1`;
+                    const limitRes = await helper.selectRecordsWithQuery(limitQuery, [String(matchedBranch.id)]).catch(() => null);
+                    const limitVal = (limitRes && limitRes.data && limitRes.data.length > 0) ? parseFloat(limitRes.data[0].approval_limit) : 0;
+
+                    userData.branch = {
+                        id: String(matchedBranch.id),
+                        description: `${matchedBranch.name} (${matchedBranch.code})`,
+                        approval_limit: limitVal
+                    };
+                    userData.branch_id = String(matchedBranch.id);
+                } else {
+                    userData.branch = null;
+                    userData.branch_id = null;
+                }
 
                 const accessToken = jwt.sign({ email }, process.env.ACCESS_TOKEN_SECRET || "access_secret", { expiresIn: "60m" });
                 return res.status(200).json({ accessToken, user: [userData], code: "200" });

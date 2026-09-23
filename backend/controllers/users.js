@@ -211,21 +211,50 @@ const login = async (req, res) => {
 				const result = await bcrypt.compare(password, userPassowrd);
 				if (result) {
 
-					const query = `SELECT u.id AS user_id, u.first_name, u.last_name, u.employee_id, u.email, u.signature, COALESCE(u.branch_id, u.branch, '101') AS branch_id, COALESCE(u.branch, 'Head Office (000)') AS branch_name, r.id AS role_id, r.name AS role_name FROM users u JOIN model_has_roles m ON u.id = m.model_id JOIN roles r ON r.id = m.role_id WHERE u.email = '${email}';`
+					const query = `SELECT u.id AS user_id, u.first_name, u.last_name, u.employee_id, u.email, u.signature, r.id AS role_id, r.name AS role_name FROM users u JOIN model_has_roles m ON u.id = m.model_id JOIN roles r ON r.id = m.role_id WHERE u.email = ?;`;
 
-					const userDetails = await helper.selectRecordsWithQuery(query);
+					const userDetails = await helper.selectRecordsWithQuery(query, [email]);
 
-					if(userDetails.status === "success" && userDetails.data && userDetails.data.length > 0){
+					if (userDetails.status === "success" && userDetails.data && userDetails.data.length > 0) {
 						const userData = userDetails.data[0];
-						const limitQuery = `SELECT approval_limit FROM branch_approval_limits WHERE branch_id = ? LIMIT 1`;
-						const limitRes = await helper.selectRecordsWithQuery(limitQuery, [String(userData.branch_id || '101')]).catch(() => null);
-						const limitVal = (limitRes && limitRes.data && limitRes.data.length > 0) ? parseFloat(limitRes.data[0].approval_limit) : 50000;
 
-						userData.branch = {
-							id: String(userData.branch_id || '101'),
-							description: userData.branch_name || 'Head Office (000)',
-							approval_limit: limitVal
-						};
+						let hrData;
+						try {
+							hrData = await fetchHrEmployeesFromSwagger();
+						} catch (hrErr) {
+							console.error("[HR API STRICT FAILURE in login]:", hrErr.message);
+							return res.status(503).json({
+								result: "HR API Service is currently unavailable. Login failed.",
+								code: "503",
+								error: "HR_API_UNAVAILABLE"
+							});
+						}
+
+						const { masterBranches, employees } = hrData;
+						const hrEmp = employees.find((e) => 
+							(e.employeeCode && String(e.employeeCode).trim().toLowerCase() === String(userData.employee_id).trim().toLowerCase()) ||
+							(e.workEmail && String(e.workEmail).trim().toLowerCase() === String(userData.email).trim().toLowerCase()) ||
+							(e.email && String(e.email).trim().toLowerCase() === String(userData.email).trim().toLowerCase())
+						);
+
+						const rawBranchVal = hrEmp?.branch || hrEmp?.branchCode;
+						const matchedBranch = resolveHrBranch(rawBranchVal, masterBranches);
+
+						if (matchedBranch) {
+							const limitQuery = `SELECT approval_limit FROM branch_approval_limits WHERE branch_id = ? LIMIT 1`;
+							const limitRes = await helper.selectRecordsWithQuery(limitQuery, [String(matchedBranch.id)]).catch(() => null);
+							const limitVal = (limitRes && limitRes.data && limitRes.data.length > 0) ? parseFloat(limitRes.data[0].approval_limit) : 0;
+
+							userData.branch = {
+								id: String(matchedBranch.id),
+								description: `${matchedBranch.name} (${matchedBranch.code})`,
+								approval_limit: limitVal
+							};
+							userData.branch_id = String(matchedBranch.id);
+						} else {
+							userData.branch = null;
+							userData.branch_id = null;
+						}
 
 						//generate token
 						const accessToken = jwt.sign({ email: email }, process.env.ACCESS_TOKEN_SECRET || "access_secret", { expiresIn: "60m" });

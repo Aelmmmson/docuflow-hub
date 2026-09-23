@@ -23,22 +23,23 @@ export interface AuthUser {
   signature?: string;
   phone?: string;
   branch?: BranchInfo | null;
+  branch_id?: string | number;
 }
 
 export function mapUserResponse(rawUserData: any): AuthUser {
   const userObj = Array.isArray(rawUserData) ? rawUserData[0] : rawUserData;
   let branchData: BranchInfo | null = null;
-  if (userObj?.branch && typeof userObj.branch === 'object') {
+  if (userObj?.branch && typeof userObj.branch === 'object' && userObj.branch.id && userObj.branch.description) {
     branchData = {
-      id: String(userObj.branch.id || '000'),
-      description: String(userObj.branch.description || 'Head Office (000)'),
+      id: String(userObj.branch.id),
+      description: String(userObj.branch.description),
       approval_limit: Number(userObj.branch.approval_limit || 0)
     };
-  } else if (userObj?.branch_id || userObj?.branch) {
+  } else if (userObj?.branch_id && (userObj?.branch_name || userObj?.branch)) {
     branchData = {
-      id: String(userObj.branch_id || '000'),
-      description: String(userObj.branch_name || userObj.branch || 'Head Office (000)'),
-      approval_limit: 0
+      id: String(userObj.branch_id),
+      description: String(userObj.branch_name || userObj.branch),
+      approval_limit: Number(userObj.approval_limit || 0)
     };
   }
   return {
