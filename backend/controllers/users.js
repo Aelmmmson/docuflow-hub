@@ -260,13 +260,12 @@ const login = async (req, res) => {
 						const accessToken = jwt.sign({ email: email }, process.env.ACCESS_TOKEN_SECRET || "access_secret", { expiresIn: "60m" });
 						const refreshToken = jwt.sign({ email: email }, process.env.REFRESH_TOKEN_SECRET || "refresh_secret", { expiresIn: "1d" });
 
-						//save the token in the database (delete old token first to prevent ER_DUP_ENTRY)
+						// Save device refresh token in database (supports multi-device sessions)
 						const data = {
 							email: userQuery.data[0].email,
 							token: refreshToken
 						};
 
-						await helper.deleteRecordsWithCondition(passwordResetTokenCollection, [{ email: userQuery.data[0].email }]).catch(() => {});
 						await helper.dynamicInsert(passwordResetTokenCollection, data).catch(() => {});
 
 						const isProduction = process.env.NODE_ENV === "production";
@@ -311,36 +310,25 @@ const login = async (req, res) => {
 const logout = async (req, res) => {
 	try {
 		const cookies = req.cookies;
-		!cookies?.refreshToken && res.status(401).json({ error: "No Content" });
+		const refreshToken = cookies?.refreshToken || req.headers["x-refresh-token"];
 
-		const refreshToken = cookies.refreshToken;
-
-		//select refresh token from db 
-		data = {token: refreshToken}
-		const user = await helper.selectRecordsWithCondition(passwordResetTokenCollection, [data]);
-		if (user.status === "success" ){
-			//delete the refresh token from db
-			const deleted = await helper.deleteRecordsWithCondition(passwordResetTokenCollection, [data]);
-			if (deleted.status === "success") {
-				res.clearCookie("refreshToken",{httpOnly:true,sameSite:'None',secure:true});
-				res.status(200).json({ status: "success", message: "User logged out successfully" });
-			}else{
-				//delete failed
-				console.log(deleted.message);
-				res.status(500).json({ error: "Internal Server Error" });
-			}
-
-		}else{
-			console.log(user.message);
-			res.clearCookie("refreshToken",{httpOnly:true,sameSite:'None',secure:true});
-			// res.sendStatus(403)
-			// .json({ result: user.message, code: "403" });
+		if (refreshToken) {
+			await helper.deleteRecordsWithCondition(passwordResetTokenCollection, [{ token: refreshToken }]).catch(() => {});
 		}
+
+		const isProduction = process.env.NODE_ENV === "production";
+		res.clearCookie("refreshToken", {
+			httpOnly: true,
+			sameSite: isProduction ? "None" : "Lax",
+			secure: isProduction
+		});
+
+		return res.status(200).json({ status: "success", message: "User logged out successfully", code: "200" });
 	} catch (error) {
-		console.log(error);
-		res.status(400).json({ error: "Internal Server Error"})
+		console.error("Logout error:", error);
+		return res.status(200).json({ status: "success", message: "User logged out", code: "200" });
 	}
-}
+};
 
 const resolveHrBranch = (rawVal, masterBranches) => {
 	if (!rawVal || !Array.isArray(masterBranches) || masterBranches.length === 0) return null;
@@ -355,7 +343,14 @@ const resolveHrBranch = (rawVal, masterBranches) => {
 	);
 };
 
+const cache = require("memory-cache");
+
 const fetchHrEmployeesFromSwagger = async () => {
+	const cachedData = cache.get("hr_employees_branches_cache");
+	if (cachedData) {
+		return cachedData;
+	}
+
 	const axios = require("axios");
 	const headers = { "x-api-key": process.env.HR_MOBILE_API_KEY || "81780c52fe24634d0ab7164a6e7a74c908da568a906111db" };
 
@@ -380,7 +375,9 @@ const fetchHrEmployeesFromSwagger = async () => {
 		page++;
 	} while (page <= totalPages);
 
-	return { masterBranches, employees: allEmployees };
+	const result = { masterBranches, employees: allEmployees };
+	cache.put("hr_employees_branches_cache", result, 30000); // 30s cache TTL
+	return result;
 };
 
 const getHrEmployees = async (req, res) => {
