@@ -101,6 +101,7 @@ export function UsersTab() {
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [roleFilter, setRoleFilter] = useState("all");
+  const [tableBranchFilter, setTableBranchFilter] = useState("all");
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -167,15 +168,22 @@ export function UsersTab() {
     fetchData();
   }, [toast]);
 
+  // Dynamic list of unique branches present in the loaded users table
+  const availableTableBranches = Array.from(
+    new Set(users.map((u) => u.branch).filter((b): b is string => Boolean(b && b.trim() !== "" && b !== "N/A")))
+  ).sort();
+
   const filteredUsers = users.filter((user) => {
     const searchLower = searchValue.toLowerCase();
     const matchesSearch =
       user.employee_id?.toLowerCase().includes(searchLower) ||
       `${user.first_name} ${user.last_name}`.toLowerCase().includes(searchLower) ||
-      user.email?.toLowerCase().includes(searchLower);
+      user.email?.toLowerCase().includes(searchLower) ||
+      (user.branch && user.branch.toLowerCase().includes(searchLower));
     const matchesStatus = statusFilter === "all" || user.status === statusFilter;
     const matchesRole = roleFilter === "all" || user.role === roleFilter;
-    return matchesSearch && matchesStatus && matchesRole;
+    const matchesBranch = tableBranchFilter === "all" || user.branch === tableBranchFilter;
+    return matchesSearch && matchesStatus && matchesRole && matchesBranch;
   });
 
   // Pagination calculations
@@ -618,7 +626,7 @@ export function UsersTab() {
         <SearchFilter
           searchValue={searchValue}
           onSearchChange={setSearchValue}
-          searchPlaceholder="Search users..."
+          searchPlaceholder="Search by user, email, role, or branch..."
           filters={[
             {
               key: "status",
@@ -639,6 +647,16 @@ export function UsersTab() {
               options: [
                 { value: "all", label: "All Roles" },
                 ...roles.map((r) => ({ value: r.name, label: toTitleCase(r.name) })),
+              ],
+            },
+            {
+              key: "branch",
+              label: "Branch",
+              value: tableBranchFilter,
+              onChange: setTableBranchFilter,
+              options: [
+                { value: "all", label: "All Branches" },
+                ...availableTableBranches.map((b) => ({ value: b, label: b })),
               ],
             },
           ]}

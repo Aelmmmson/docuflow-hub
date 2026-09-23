@@ -105,7 +105,12 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
     }
     try {
       setVerifyingApprovers(true);
-      const res = await api.get(`/verify-doctype-approvers/${doctypeId}`);
+      const queryParams = new URLSearchParams();
+      if (userBranchId) queryParams.append("branch_id", userBranchId);
+      if (userBranchName) queryParams.append("branch_name", userBranchName);
+
+      const url = `/verify-doctype-approvers/${doctypeId}${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
+      const res = await api.get(url);
       const data = res.data;
       setApproverCheck({
         isValid: data.isValid === true,
@@ -516,7 +521,11 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
                 <AlertTriangle className="h-4 w-4 shrink-0 text-destructive mt-0.5" />
                 <div className="space-y-1">
                   <AlertTitle className="text-xs font-bold leading-tight">
-                    {approverCheck.status === "NO_APPROVERS" ? "No Approvers Configured" : "Inactive / Unavailable Approvers"}
+                    {approverCheck.status === "NO_APPROVERS"
+                      ? "No Approvers Configured"
+                      : approverCheck.status === "NO_BRANCH_APPROVERS"
+                      ? "No Branch Approvers Configured"
+                      : "Inactive / Unavailable Approvers"}
                   </AlertTitle>
                   <AlertDescription className="text-xs leading-normal">
                     {approverCheck.message}
