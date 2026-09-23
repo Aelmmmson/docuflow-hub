@@ -329,7 +329,7 @@ const verifyDocTypeApprovers = async (req, res) => {
             });
         }
 
-        // 2. Check if Originating Branch has active approvers configured in system
+        // 2. Check if Originating Branch (or system) has active approvers
         if (branchId || branchName) {
             let hrData = null;
             try {
@@ -349,6 +349,27 @@ const verifyDocTypeApprovers = async (req, res) => {
             `;
             const activeUsersRes = await helper.selectRecordsWithQuery(usersQuery);
             const activeUsers = activeUsersRes.data || [];
+
+            const cleanBranchStr = (str) => {
+                if (!str) return "";
+                return String(str)
+                    .replace(/\([^)]*\)/g, "")
+                    .replace(/[^a-zA-Z0-9]/g, "")
+                    .toLowerCase()
+                    .replace(/^0+/, "");
+            };
+
+            const cleanBranchCode = (str) => {
+                if (!str) return "";
+                const parenMatch = String(str).match(/\((\d+)\)/);
+                if (parenMatch) return parenMatch[1].replace(/^0+/, "");
+                const digits = String(str).replace(/[^0-9]/g, "").replace(/^0+/, "");
+                return digits;
+            };
+
+            const targetCode1 = cleanBranchCode(branchId);
+            const targetCode2 = cleanBranchCode(branchName);
+            const targetStr = cleanBranchStr(branchName);
 
             let branchApproversCount = 0;
             if (hrData && Array.isArray(hrData.employees)) {
@@ -378,13 +399,20 @@ const verifyDocTypeApprovers = async (req, res) => {
                     const rawBranchVal = hrEmp?.branch || hrEmp?.branchCode;
                     const matchedBranch = resolveHrBranch(rawBranchVal, masterBranches);
 
-                    const userBId = matchedBranch ? String(matchedBranch.id) : "";
+                    const userBId = matchedBranch ? String(matchedBranch.id) : String(rawBranchVal || "");
                     const userBName = matchedBranch ? `${matchedBranch.name} (${matchedBranch.code})` : (rawBranchVal ? String(rawBranchVal) : "");
 
-                    const isMatch = (branchId && (userBId === String(branchId) || String(rawBranchVal) === String(branchId))) ||
-                                    (branchName && userBName.toLowerCase().includes(String(branchName).toLowerCase()));
+                    const uCode1 = cleanBranchCode(userBId);
+                    const uCode2 = cleanBranchCode(userBName);
+                    const uCode3 = cleanBranchCode(rawBranchVal);
+                    const uStr = cleanBranchStr(userBName);
 
-                    if (isMatch) {
+                    const isCodeMatch = (targetCode1 && (targetCode1 === uCode1 || targetCode1 === uCode2 || targetCode1 === uCode3)) ||
+                                        (targetCode2 && (targetCode2 === uCode1 || targetCode2 === uCode2 || targetCode2 === uCode3));
+
+                    const isNameMatch = targetStr && uStr && (targetStr === uStr || targetStr.includes(uStr) || uStr.includes(targetStr));
+
+                    if (isCodeMatch || isNameMatch) {
                         branchApproversCount++;
                     }
                 });
