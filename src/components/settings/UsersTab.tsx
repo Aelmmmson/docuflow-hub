@@ -96,7 +96,7 @@ export function UsersTab() {
 
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
-  const [branches, setBranches] = useState<Array<{ id: string | number; description: string }>>([]);
+  const [branches, setBranches] = useState<Array<{ id: string | number; description: string; code?: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -230,17 +230,58 @@ export function UsersTab() {
 
   const handleEdit = (user: User) => {
     setEditingUser(user);
-    const matched = apiEmployees.find((e) => e.work_email?.toLowerCase() === user.email?.toLowerCase());
+    const matched = apiEmployees.find((e) => e.work_email?.toLowerCase() === user.email?.toLowerCase() || e.employee_id === user.employee_id);
     setSelectedEmployee(matched?.id || user.employee_id || "existing");
     const matchedRole = roles.find((r) => r.name.toLowerCase() === user.role?.toLowerCase());
     setSelectedRole(matchedRole ? matchedRole.name : user.role);
     setSelectedStatus(user.status);
-    setSelectedUserBranch(user.branch_id ? String(user.branch_id) : "");
+
+    const bVal = matched?.branch || user.branch_id || user.branch || "";
+    const matchedBranchObj = branches.find((b) => 
+      String(b.id) === String(bVal) ||
+      (b.code && String(b.code) === String(bVal)) ||
+      (b.description && bVal && b.description.toLowerCase().includes(String(bVal).toLowerCase()))
+    );
+    setSelectedUserBranch(matchedBranchObj ? String(matchedBranchObj.id) : (user.branch_id ? String(user.branch_id) : ""));
     setPhone(user.phone || matched?.mobile_phone || "");
     setApprovalLimit(user.approval_limit !== undefined && user.approval_limit !== null ? String(user.approval_limit) : "0");
     setSignature(user.signature || null);
     setIsAsideOpen(true);
   };
+
+  // Auto-synchronize and populate employee branch from HR API whenever employee or drawer state changes
+  useEffect(() => {
+    if (!isAsideOpen) return;
+
+    const selectedEmpObj = apiEmployees.find(
+      (e) =>
+        e.id === selectedEmployee ||
+        (editingUser &&
+          ((e.employee_id && String(e.employee_id).toLowerCase() === String(editingUser.employee_id).toLowerCase()) ||
+            (e.work_email && editingUser.email && e.work_email.toLowerCase() === editingUser.email.toLowerCase())))
+    );
+
+    const rawBranchVal = selectedEmpObj?.branch || (editingUser?.branch_id && String(editingUser.branch_id).trim() !== "" ? editingUser.branch_id : editingUser?.branch) || "";
+
+    if (rawBranchVal && String(rawBranchVal).trim() !== "" && String(rawBranchVal).trim() !== "null") {
+      const codeStr = String(rawBranchVal).trim();
+      const matched = branches.find(
+        (b) =>
+          String(b.id) === codeStr ||
+          (b.code && String(b.code) === codeStr) ||
+          (b.description && (
+            b.description.toLowerCase().includes(`(${codeStr.toLowerCase()})`) ||
+            b.description.toLowerCase() === codeStr.toLowerCase() ||
+            codeStr.toLowerCase().includes(b.description.toLowerCase())
+          ))
+      );
+      if (matched) {
+        setSelectedUserBranch(String(matched.id));
+      } else {
+        setSelectedUserBranch(codeStr);
+      }
+    }
+  }, [isAsideOpen, editingUser, selectedEmployee, apiEmployees, branches]);
 
   // Conflict & Confirmation Modal States
   const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
@@ -760,23 +801,46 @@ export function UsersTab() {
           </div>
 
           {/* Branch (Only displayed after selecting an employee or when editing an existing user) */}
-          {(editingUser || selectedEmployee) && (
-            <div className="space-y-2">
-              <Label htmlFor="branch">Assigned Branch</Label>
-              <Select value={selectedUserBranch} onValueChange={setSelectedUserBranch}>
-                <SelectTrigger id="branch">
-                  <SelectValue placeholder="Select branch" />
-                </SelectTrigger>
-                <SelectContent>
-                  {branches.map((b) => (
-                    <SelectItem key={b.id} value={String(b.id)}>
-                      {b.description}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          {(editingUser || selectedEmployee) && (() => {
+            const selectedEmpObj = apiEmployees.find(
+              (e) =>
+                e.id === selectedEmployee ||
+                (editingUser &&
+                  ((e.employee_id && String(e.employee_id).toLowerCase() === String(editingUser.employee_id).toLowerCase()) ||
+                    (e.work_email && editingUser.email && e.work_email.toLowerCase() === editingUser.email.toLowerCase())))
+            );
+            const apiBranchValue = selectedEmpObj?.branch || "";
+            const hasApiBranch = Boolean(apiBranchValue && String(apiBranchValue).trim() !== "" && String(apiBranchValue).trim() !== "null");
+
+            return (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="branch">Assigned Branch</Label>
+                  {hasApiBranch ? (
+                    <Badge variant="outline" className="text-[10px] bg-muted text-muted-foreground font-normal border-border">
+                      Auto-Populated from HR API
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 font-normal border-amber-200 dark:border-amber-800">
+                      Manual Selection Required (No HR API Branch)
+                    </Badge>
+                  )}
+                </div>
+                <Select value={selectedUserBranch} onValueChange={setSelectedUserBranch} disabled={hasApiBranch}>
+                  <SelectTrigger id="branch" className={cn(hasApiBranch && "bg-muted/60 opacity-80 cursor-not-allowed")}>
+                    <SelectValue placeholder="Select branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={String(b.id)}>
+                        {b.description}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            );
+          })()}
 
           {/* Approval Signing Limit (Only displayed when an Approver role is selected) */}
           {(() => {

@@ -313,15 +313,23 @@ const syncEmployeeBranchesFromHr = async () => {
 
 			const dbUsers = await helper.selectRecordsWithQuery("SELECT id, employee_id, email, branch, branch_id FROM users");
 			if (dbUsers.status === "success" && Array.isArray(dbUsers.data)) {
-				const branchesRes = await helper.selectRecordsWithCondition("code_creation_details", [{ code_id: "1" }]);
-				const masterBranches = (branchesRes && branchesRes.status === "success" && branchesRes.data) ? branchesRes.data : [];
+				let masterBranches = [];
+				try {
+					const hrBranchRes = await axios.get("http://10.203.14.114:3099/v1/api/hr/me/branches", {
+						headers: { "x-api-key": process.env.HR_MOBILE_API_KEY || "81780c52fe24634d0ab7164a6e7a74c908da568a906111db" },
+						timeout: 4000
+					});
+					if (hrBranchRes.data?.data?.branches && Array.isArray(hrBranchRes.data.data.branches)) {
+						masterBranches = hrBranchRes.data.data.branches;
+					}
+				} catch (e) {}
 
 				for (const u of dbUsers.data) {
 					const hrEmp = empMap.get(String(u.employee_id).trim()) || empMap.get(String(u.email || "").toLowerCase().trim());
-					if (hrEmp && hrEmp.branch) {
+					if (hrEmp && hrEmp.branch && String(hrEmp.branch).trim() !== "" && String(hrEmp.branch).trim() !== "null") {
 						const hrBranchCode = String(hrEmp.branch).trim();
-						const matchedBranch = masterBranches.find(b => b.description && (b.description.includes(`(${hrBranchCode})`) || b.description.includes(hrBranchCode)));
-						const newBranchDesc = matchedBranch ? matchedBranch.description : `Branch (${hrBranchCode})`;
+						const matchedBranch = masterBranches.find(b => String(b.code).trim() === hrBranchCode || String(b.id).trim() === hrBranchCode);
+						const newBranchDesc = matchedBranch ? `${matchedBranch.name} (${matchedBranch.code})` : `Branch (${hrBranchCode})`;
 						const newBranchId = matchedBranch ? String(matchedBranch.id) : hrBranchCode;
 
 						if (u.branch !== newBranchDesc || String(u.branch_id || "") !== newBranchId) {
