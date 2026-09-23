@@ -566,7 +566,7 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
                 />
               </div>
 
-              <div className="space-y-1.5">
+              {/* <div className="space-y-1.5">
                 <Label className="text-xs font-medium">Beneficiary Account Number</Label>
                 <Select
                   value={customerNumber}
@@ -587,7 +587,7 @@ export function DocumentForm({ selectedTemplate, onClearTemplate, onDocumentSubm
                     })}
                   </SelectContent>
                 </Select>
-              </div>
+              </div> */}
             </div>
 
             {/* Real-time Over-limit Escalation Warning Banner */}

@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { Plus, Edit2, UserPlus, Check, ChevronsUpDown, FileSignature, Upload, Trash2, Eye, AlertTriangle, ShieldAlert, AlertCircle } from "lucide-react";
+import { Plus, Edit2, UserPlus, Check, ChevronsUpDown, FileSignature, Upload, Trash2, Eye, AlertTriangle, ShieldAlert, AlertCircle, ShieldCheck } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
@@ -467,7 +467,32 @@ export function UsersTab() {
     {
       key: "name",
       header: "Name",
-      render: (u) => <span>{toTitleCase(`${u.first_name} ${u.last_name}`)}</span>,
+      render: (u) => {
+        const limitNum = Number(u.approval_limit || 0);
+        const roleLower = u.role?.toLowerCase() || "";
+        const isUnlimited = limitNum >= 900000000 || roleLower === "md" || roleLower.includes("managing director");
+
+        return (
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-foreground">{toTitleCase(`${u.first_name} ${u.last_name}`)}</span>
+            {isUnlimited && (
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 text-[10px] font-bold py-0.5 px-1.5 flex items-center gap-1 shrink-0 shadow-sm">
+                      <ShieldCheck className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                      <span>Unlimited Approver</span>
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Head Office Unlimited Signing Authority Approver</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
+        );
+      },
     },
     { key: "email", header: "Email", hideOnMobile: true },
     {
@@ -1028,9 +1053,17 @@ export function UsersTab() {
             <div className="p-4 rounded-xl bg-card border border-border space-y-3">
               <div className="flex items-center justify-between pb-3 border-b border-border">
                 <div>
-                  <h3 className="font-bold text-base text-foreground">
-                    {toTitleCase(`${viewingUser.first_name} ${viewingUser.last_name}`)}
-                  </h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-base text-foreground">
+                      {toTitleCase(`${viewingUser.first_name} ${viewingUser.last_name}`)}
+                    </h3>
+                    {(Number(viewingUser.approval_limit || 0) >= 900000000 || viewingUser.role?.toLowerCase() === "md" || viewingUser.role?.toLowerCase()?.includes("managing director")) && (
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 text-[10px] font-bold py-0.5 px-1.5 flex items-center gap-1 shrink-0 shadow-sm">
+                        <ShieldCheck className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                        <span>Unlimited Approver</span>
+                      </Badge>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground">{viewingUser.email}</p>
                 </div>
                 <StatusBadge status={viewingUser.status} />

@@ -19,7 +19,7 @@ const tabs = [
   { id: "users", label: "Users", icon: Users },
   { id: "parameters", label: "Parameters", icon: FileType },
   { id: "approval", label: "Document Approval Setup", icon: GitBranch },
-  { id: "beneficiary", label: "Beneficiary Setup", icon: Building2 },
+  // { id: "beneficiary", label: "Beneficiary Setup", icon: Building2 },
 ];
 
 export default function Settings() {
@@ -84,11 +84,11 @@ export default function Settings() {
           </div>
         </TabsContent>
 
-        <TabsContent value="beneficiary" className="mt-0">
+        {/* <TabsContent value="beneficiary" className="mt-0">
           <div className="rounded-xl bg-card p-4 shadow-card-md animate-fade-in">
             <BeneficiaryTab />
           </div>
-        </TabsContent>
+        </TabsContent> */}
       </Tabs>
     </div>
   );

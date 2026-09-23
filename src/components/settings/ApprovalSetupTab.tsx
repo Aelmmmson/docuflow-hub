@@ -231,8 +231,8 @@ export function ApprovalSetupTab() {
       stages: stages.map((stage, idx) => ({
         name: stage.name,
         scope: idx === 0 ? "BRANCH" : "HEAD_OFFICE",
-        isRequired: idx === 0 ? true : stage.isRequired,
-        threshold_amount: 0,
+        isRequired: true,
+        threshold_amount: Number(stage.thresholdAmount) || 0,
         approvers: [],
       })),
     };
@@ -586,49 +586,40 @@ export function ApprovalSetupTab() {
                 />
               </div>
 
-              {/* Universal isRequired Toggle Card */}
-              <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-1.5">
-                      <Label htmlFor="stage-is-required" className="text-xs font-bold text-foreground cursor-pointer">
-                        Mandatory Stage (isRequired)
-                      </Label>
-                      {currentStep === 1 && (
-                        <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30 font-semibold">
-                          Compulsory for Stage 1
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      {currentStep === 1
-                        ? "Stage 1 is compulsory and all documents must originate through this stage."
-                        : "If enabled, documents MUST stop for approval at this stage regardless of amount."}
-                    </p>
-                  </div>
-                  <Switch
-                    id="stage-is-required"
-                    checked={currentStep === 1 ? true : stages[currentStep - 1].isRequired}
-                    disabled={currentStep === 1}
-                    onCheckedChange={(checked) => {
-                      if (currentStep > 1) {
-                        updateStage(currentStep - 1, { isRequired: checked });
-                      }
-                    }}
-                  />
-                </div>
+              {/* Stage Approval Limit */}
+              <div className="space-y-1.5">
+                <Label htmlFor="thresholdAmount" className="text-xs font-medium">
+                  Stage Approval Limit ({currentStep === 1 ? "Branch Limit" : "Head Office Exact Limit"})
+                </Label>
+                <Input
+                  id="thresholdAmount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={stages[currentStep - 1].thresholdAmount || ""}
+                  onChange={(e) => updateStage(currentStep - 1, { thresholdAmount: parseFloat(e.target.value) || 0 })}
+                  placeholder={currentStep === 1 ? "e.g., 50000 (0 for default)" : "e.g., 400000 (Exact Head Office Approver Limit)"}
+                  className="h-9 font-medium text-xs"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  {currentStep === 1
+                    ? "Branch limit for Stage 1 sign-off. Higher doc amounts bypass lower branch approvers directly to top branch approver."
+                    : `Exact personal signing limit for the Head Office approver assigned to Stage ${currentStep}.`}
+                </p>
               </div>
 
-              {/* Dynamic Branch / Head Office Routing Info Banner */}
-              <div className="rounded-xl border border-border bg-muted/30 p-3.5 space-y-1">
-                <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Dynamic Approver Routing</span>
-                </span>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
+              {/* Mandatory Stage Card (All stages mandatory) */}
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-foreground">Mandatory Stage</span>
+                  <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30 font-semibold">
+                    Compulsory
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
                   {currentStep === 1
-                    ? "Stage 1 routes dynamically to all active approvers in the document's originating branch."
-                    : "Stage " + currentStep + " escalates to Head Office approvers ordered by ascending signing limit."}
+                    ? "Stage 1 is compulsory for all documents originating from the branch."
+                    : `Stage ${currentStep} is mandatory for documents escalating to Head Office.`}
                 </p>
               </div>
             </div>

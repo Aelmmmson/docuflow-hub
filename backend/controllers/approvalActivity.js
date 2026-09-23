@@ -138,86 +138,143 @@ const getPendingDocs = async (req, res) => {
     // Get a connection from the pool
     let query = "";
     const isFinance = role.some(r => String(r).toLowerCase() === "finance");
-    const isApprover = role.some(r => String(r).toLowerCase() === "approver" || String(r).toLowerCase() === "admin");
 
     if (isFinance) {
-      query = `SELECT DISTINCT rd.*, doctype_details.description AS doctype_name, CONCAT(creator.first_name, ' ', creator.last_name) AS created_by 
+      const query = `SELECT DISTINCT rd.*, doctype_details.description AS doctype_name, CONCAT(creator.first_name, ' ', creator.last_name) AS created_by 
                FROM request_documents rd 
                JOIN code_creation_details AS doctype_details ON rd.doctype_id = doctype_details.id AND doctype_details.code_id = 2 
                LEFT JOIN users creator ON rd.posted_by = creator.id 
                WHERE rd.status = '${status_approved}' AND rd.requested_amount != '' AND rd.batch_no IS NULL 
                ORDER BY rd.id DESC`;
-    } else {
-      query = `
+      const financeRes = await helper.selectRecordsWithQuery(query);
+      return res.status(200).json({ documents: financeRes.data || [], code: "200" });
+    }
+
+    // Fetch user details
+    const userQuery = `
+      SELECT u.id, u.branch, u.branch_id, u.approval_limit, r.name as role_name
+      FROM users u
+      LEFT JOIN model_has_roles mhr ON u.id = mhr.model_id
+      LEFT JOIN roles r ON mhr.role_id = r.id
+      WHERE u.id = ?`;
+    const userRes = await helper.selectRecordsWithQuery(userQuery, [userId]);
+    if (!userRes.data || userRes.data.length === 0) {
+      return res.status(200).json({ documents: [], code: "200" });
+    }
+    const currentUser = userRes.data[0];
+    const userLimit = parseFloat(currentUser.approval_limit || 0);
+    const isUserHeadOffice = String(currentUser.branch || "").toLowerCase().includes("head office") ||
+                             ["000", "235", "000", "235"].includes(String(currentUser.branch_id || "")) ||
+                             String(currentUser.role_name || "").toLowerCase() === "md" ||
+                             String(currentUser.role_name || "").toLowerCase().includes("managing director");
+
+    // Fetch all pending documents
+    const pendingDocsQuery = `
       SELECT DISTINCT rd.*, doctype_details.description AS doctype_name, CONCAT(creator.first_name, ' ', creator.last_name) AS created_by
       FROM request_documents rd
-      JOIN code_creation_details AS doctype_details
-        ON rd.doctype_id = doctype_details.id
-        AND doctype_details.code_id = 2
+      JOIN code_creation_details AS doctype_details ON rd.doctype_id = doctype_details.id AND doctype_details.code_id = 2
       LEFT JOIN users creator ON rd.posted_by = creator.id
-      INNER JOIN users u_current ON u_current.id = ${userId}
-      WHERE 
-        rd.status IN ('SUBMITTED', 'PENDING')
+      WHERE rd.status IN ('SUBMITTED', 'PENDING')
         AND NOT EXISTS (
           SELECT 1 FROM approval_activities aa 
-          WHERE aa.doc_id = rd.id AND aa.approved_by = ${userId} AND aa.approval_stage = rd.approval_stage
-        )
-        AND (
-          /* Stage 1: Origination Branch Approvers */
-          (
-            rd.approval_stage = 1 
-            AND (
-              u_current.branch = rd.branch 
-              OR u_current.branch_id = rd.branch_id
-              OR (rd.branch IS NOT NULL AND u_current.branch LIKE CONCAT('%', rd.branch, '%'))
-              OR (u_current.branch IS NOT NULL AND rd.branch LIKE CONCAT('%', u_current.branch, '%'))
-            )
-          )
-          OR
-          /* Stage 2+: Head Office Approvers (code 000 / HEAD OFFICE) */
-          (
-            rd.approval_stage > 1 
-            AND (
-              LOWER(u_current.branch) LIKE '%head office%' 
-              OR u_current.branch_id IN (101, 235, '000', '101', '235')
-              OR LOWER(u_current.role) = 'md'
-              OR LOWER(u_current.role) LIKE '%managing director%'
-            )
-          )
+          WHERE aa.doc_id = rd.id AND aa.approved_by = ? AND aa.approval_stage = rd.approval_stage
         )
       ORDER BY rd.id DESC`;
-    }
-    pool.getConnection((err, connection) => {
-      if (err) {
-        console.error("Error getting connection from pool: ", err);
-        res.status(500).json({ message: "Database connection failed." });
-        return;
-      }
+    
+    const docsRes = await helper.selectRecordsWithQuery(pendingDocsQuery, [userId]);
+    const allPending = docsRes.data || [];
+    const eligibleDocs = [];
 
+    for (const rd of allPending) {
+      const docAmount = parseFloat(rd.requested_amount || 0);
+      const isDocBranchMatch = String(currentUser.branch || "").toLowerCase() === String(rd.branch || "").toLowerCase() ||
+                               (currentUser.branch_id && rd.branch_id && String(currentUser.branch_id) === String(rd.branch_id)) ||
+                               (rd.branch && String(currentUser.branch || "").toLowerCase().includes(String(rd.branch).toLowerCase())) ||
+                               (currentUser.branch && String(rd.branch || "").toLowerCase().includes(String(currentUser.branch).toLowerCase()));
 
-      // Execute the query
-      connection.query(query, (err, results) => {
-        if (err) {
-          console.error("Error executing query: ", err);
-          res.status(500).json({ message: "Query execution failed." });
-        } else {
-          // console.log("Query successful: ", results);
-          res.status(200).json({
-            documents: results,
-            code: "200",
-          });
+      // Fetch setup stage info for this document's doctype and current stage
+      const stageSetupQuery = `SELECT * FROM doc_approval_setups WHERE doctype_id = ? AND approval_stage = ?`;
+      const stageSetupRes = await helper.selectRecordsWithQuery(stageSetupQuery, [rd.doctype_id, rd.approval_stage]);
+      const currentSetup = stageSetupRes.data?.[0];
+
+      // Check if document is in Branch Phase vs Head Office Phase
+      const isBranchStage = rd.approval_stage === 1 || currentSetup?.scope === "BRANCH";
+
+      if (isBranchStage) {
+        if (!isDocBranchMatch) continue; // Must be in the document's origination branch
+
+        // Get all active approvers in this origination branch ordered by limit ASC
+        const branchApproversQuery = `
+          SELECT u.id, u.approval_limit 
+          FROM users u
+          JOIN model_has_roles mhr ON u.id = mhr.model_id
+          JOIN roles r ON mhr.role_id = r.id
+          WHERE (LOWER(r.name) LIKE '%approver%' OR LOWER(r.name) = 'approver' OR LOWER(r.name) = 'admin')
+            AND (u.status = 1 OR u.status = '1' OR u.status = 'Active')
+            AND (
+              u.branch = ? OR u.branch_id = ? OR (u.branch IS NOT NULL AND u.branch LIKE CONCAT('%', ?, '%'))
+            )
+          ORDER BY u.approval_limit ASC`;
+        const branchApproversRes = await helper.selectRecordsWithQuery(branchApproversQuery, [rd.branch || "", rd.branch_id || "", rd.branch || ""]);
+        const branchApprovers = branchApproversRes.data || [];
+
+        if (branchApprovers.length === 0) {
+          eligibleDocs.push(rd);
+          continue;
         }
 
-        // Release the connection back to the pool
-        connection.release();
-      });
-    });
+        const maxBranchLimit = Math.max(...branchApprovers.map(a => parseFloat(a.approval_limit || 0)));
+
+        if (docAmount > maxBranchLimit) {
+          // High-Amount Bypass Rule: Doc amount exceeds ALL branch limits!
+          // Only the HIGHEST branch approver in that origination branch gets to approve/reject.
+          const topBranchApprover = branchApprovers.reduce((prev, curr) => (parseFloat(curr.approval_limit || 0) >= parseFloat(prev.approval_limit || 0) ? curr : prev), branchApprovers[0]);
+          if (Number(topBranchApprover.id) === Number(userId)) {
+            eligibleDocs.push(rd);
+          }
+        } else {
+          // Normal Branch Escalation: Pick the lowest branch approver who hasn't approved yet
+          const approvedActivitiesRes = await helper.selectRecordsWithQuery(
+            `SELECT approved_by FROM approval_activities WHERE doc_id = ? AND approval_stage = ?`,
+            [rd.id, rd.approval_stage]
+          );
+          const approvedUserIds = new Set((approvedActivitiesRes.data || []).map(a => Number(a.approved_by)));
+          
+          const pendingBranchApprovers = branchApprovers.filter(a => !approvedUserIds.has(Number(a.id)));
+          if (pendingBranchApprovers.length > 0) {
+            const nextBranchApprover = pendingBranchApprovers[0];
+            if (Number(nextBranchApprover.id) === Number(userId)) {
+              eligibleDocs.push(rd);
+            }
+          }
+        }
+      } else {
+        // Head Office Phase (Stage 2+)
+        if (!isUserHeadOffice) continue; // Must be stationed at Head Office
+
+        const stageLimit = parseFloat(currentSetup?.threshold_amount || 0);
+        const isFinalStage = !currentSetup || stageLimit >= 900000000 || userLimit >= 900000000 ||
+                             String(currentUser.role_name || "").toLowerCase() === "md" ||
+                             String(currentUser.role_name || "").toLowerCase().includes("managing director");
+
+        if (isFinalStage) {
+          // Final stage: Show to MD / Unlimited approver
+          if (userLimit >= 900000000 || String(currentUser.role_name || "").toLowerCase() === "md" || String(currentUser.role_name || "").toLowerCase().includes("managing director")) {
+            eligibleDocs.push(rd);
+          }
+        } else {
+          // Intermediate Head Office Stage: User's personal limit must match stage threshold
+          if (Math.abs(userLimit - stageLimit) < 0.01 || userLimit >= stageLimit) {
+            eligibleDocs.push(rd);
+          }
+        }
+      }
+    }
+
+    return res.status(200).json({ documents: eligibleDocs, code: "200" });
 	} catch (error) {
-		console.error("Error in getPendingDocs:", error);  // Improved error message
-		res.status(500).json({
-			message: "An unexpected error occurred",
-			code: "500"
-		});
+		console.error("Error in getPendingDocs:", error);
+		res.status(500).json({ message: "An unexpected error occurred", code: "500" });
 	}
 };
 
@@ -389,9 +446,9 @@ const approveDoc = async (req, res) => {
           }
         }
 
-        // Fetch approving user's signing limit & role
+        // Fetch approving user's signing limit, role, & branch info
         const getUserLimitQuery = `
-          SELECT u.approval_limit, r.name as role_name
+          SELECT u.id, u.branch, u.branch_id, u.approval_limit, r.name as role_name
           FROM users u
           LEFT JOIN model_has_roles mhr ON u.id = mhr.model_id
           LEFT JOIN roles r ON mhr.role_id = r.id
@@ -404,18 +461,67 @@ const approveDoc = async (req, res) => {
                      userLimit >= 900000000;
 
         const docReqAmount = parseFloat(requested_amount || document.requested_amount || 0);
-        const hasSufficientLimitToFinalize = isMD || (userLimit > 0 && docReqAmount <= userLimit);
 
-        //increment the approval stage if the required number of approvers have approved the document
-        console.log("countApprovedApprovers", countApprovedApprovers + 1);
-        console.log("quorum", quorum);
+        // Fetch setup stage info for current stage
+        const getStageSetup = `SELECT * FROM doc_approval_setups WHERE doctype_id = ? AND approval_stage = ?`;
+        const stageSetupRes = await helper.selectRecordsWithQuery(getStageSetup, [doctype_id, approvalStage]);
+        const currentSetup = stageSetupRes.data?.[0];
+        const isBranchScope = approvalStage === 1 || currentSetup?.scope === 'BRANCH';
 
-        const willCompleteStage = (countApprovedApprovers + 1) >= quorum;
-        console.log("willCompleteStage", willCompleteStage);
-        const newApprovalStage = (willCompleteStage || hasSufficientLimitToFinalize) ? approvalStage + 1 : approvalStage;
-        const current_approvers = willCompleteStage ? 0 : current_approvals + 1;
-        isRequiredApproversLeft = willCompleteStage ? 0 : isRequiredApproversLeft;
-        const isFullyApproved = hasSufficientLimitToFinalize || (newApprovalStage > max_approval_level);
+        let newApprovalStage = approvalStage;
+        let isFullyApproved = false;
+
+        if (isBranchScope) {
+          // Origination Branch Phase
+          if (docReqAmount <= userLimit) {
+            // Document is fully covered within branch limit!
+            isFullyApproved = true;
+          } else {
+            // Check if there are remaining branch approvers with higher limits in same origination branch
+            const branchApproversQuery = `
+              SELECT u.id, u.approval_limit 
+              FROM users u
+              JOIN model_has_roles mhr ON u.id = mhr.model_id
+              JOIN roles r ON mhr.role_id = r.id
+              WHERE (LOWER(r.name) LIKE '%approver%' OR LOWER(r.name) = 'approver' OR LOWER(r.name) = 'admin')
+                AND (u.status = 1 OR u.status = '1' OR u.status = 'Active')
+                AND (
+                  u.branch = ? OR u.branch_id = ? OR (u.branch IS NOT NULL AND u.branch LIKE CONCAT('%', ?, '%'))
+                )
+              ORDER BY u.approval_limit ASC`;
+            const bApproversRes = await helper.selectRecordsWithQuery(branchApproversQuery, [document.branch || "", document.branch_id || "", document.branch || ""]);
+            const bApprovers = bApproversRes.data || [];
+            
+            // Check if there's any branch approver with a higher limit who hasn't approved yet
+            const approvedActivitiesRes = await helper.selectRecordsWithQuery(
+              `SELECT approved_by FROM approval_activities WHERE doc_id = ? AND approval_stage = ?`,
+              [realDocId, approvalStage]
+            );
+            const approvedUserIds = new Set((approvedActivitiesRes.data || []).map(a => Number(a.approved_by)));
+            
+            const remainingHigherApprovers = bApprovers.filter(a => parseFloat(a.approval_limit || 0) > userLimit && !approvedUserIds.has(Number(a.id)));
+            const maxBranchLimit = Math.max(...bApprovers.map(a => parseFloat(a.approval_limit || 0)), 0);
+
+            if (remainingHigherApprovers.length > 0 && docReqAmount <= maxBranchLimit) {
+              // Move to next higher branch approver in same origination branch
+              newApprovalStage = approvalStage;
+            } else {
+              // All branch approvers completed or doc exceeds max branch limit -> Escalate to Head Office (Stage 2)
+              newApprovalStage = approvalStage + 1;
+            }
+          }
+        } else {
+          // Head Office Phase (Stage 2+)
+          const stageLimit = parseFloat(currentSetup?.threshold_amount || 0);
+          const isLastStage = isMD || approvalStage >= max_approval_level || stageLimit >= 900000000;
+
+          if (isLastStage || docReqAmount <= stageLimit) {
+            isFullyApproved = true;
+          } else {
+            newApprovalStage = approvalStage + 1;
+          }
+        }
+
         const newStatus = isFullyApproved ? 'APPROVED' : 'PENDING';
 
         // Add this query before calculating willCompleteStage
