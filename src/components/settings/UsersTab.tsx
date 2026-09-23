@@ -479,10 +479,12 @@ export function UsersTab() {
               <TooltipProvider delayDuration={200}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 text-[10px] font-bold py-0.5 px-1.5 flex items-center gap-1 shrink-0 shadow-sm">
-                      <ShieldCheck className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-                      <span>Unlimited Approver</span>
-                    </Badge>
+                    <span className="inline-flex">
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 text-[10px] font-bold py-0.5 px-1.5 flex items-center gap-1 shrink-0 shadow-sm cursor-pointer">
+                        <ShieldCheck className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                        <span>Unlimited Approver</span>
+                      </Badge>
+                    </span>
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>Head Office Unlimited Signing Authority Approver</p>

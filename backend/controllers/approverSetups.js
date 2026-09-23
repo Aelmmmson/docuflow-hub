@@ -164,11 +164,7 @@ const createApproverSetup = async (req, res) => {
                 quorum: 1,
                 approvers: JSON.stringify(stage.approvers || []),
                 details: JSON.stringify(stages),
-                posted_by: posted_by || 1,
-                scope: approval_stage === 1 ? 'BRANCH' : 'HEAD_OFFICE',
-                is_required: 1,
-                threshold_amount: parseFloat(stage.threshold_amount || stage.threshold || 0),
-                quorum_count: 1
+                posted_by: posted_by || 1
             };
 
             const setupResult = await helper.dynamicInsert('doc_approval_setups', setupData);
@@ -245,11 +241,7 @@ const updateApproverSetup = async (req, res) => {
                 quorum: 1,
                 approvers: JSON.stringify(stage.approvers || []),
                 details: JSON.stringify(stages),
-                posted_by: posted_by || 1,
-                scope: approval_stage === 1 ? 'BRANCH' : 'HEAD_OFFICE',
-                is_required: 1,
-                threshold_amount: parseFloat(stage.threshold_amount || stage.threshold || 0),
-                quorum_count: 1
+                posted_by: posted_by || 1
             };
 
             const setupResult = await helper.dynamicInsert('doc_approval_setups', setupData);
