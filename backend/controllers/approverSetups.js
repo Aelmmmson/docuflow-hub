@@ -161,7 +161,10 @@ const createApproverSetup = async (req, res) => {
                 stage_desc: stage_name,
                 number_of_approvers: num_of_approvers,
                 number_of_mandatory_approvers: mandatory_approvers,
-                quorum: 1,
+                quorum_count: 1,
+                scope: approval_stage === 1 ? 'BRANCH' : 'HEAD_OFFICE',
+                is_required: 1,
+                threshold_amount: parseFloat(stage.threshold_amount || stage.thresholdAmount || stage.threshold || 0),
                 approvers: JSON.stringify(stage.approvers || []),
                 details: JSON.stringify(stages),
                 posted_by: posted_by || 1
@@ -238,7 +241,10 @@ const updateApproverSetup = async (req, res) => {
                 stage_desc: stage_name,
                 number_of_approvers: num_of_approvers,
                 number_of_mandatory_approvers: mandatory_approvers,
-                quorum: 1,
+                quorum_count: 1,
+                scope: approval_stage === 1 ? 'BRANCH' : 'HEAD_OFFICE',
+                is_required: 1,
+                threshold_amount: parseFloat(stage.threshold_amount || stage.thresholdAmount || stage.threshold || 0),
                 approvers: JSON.stringify(stage.approvers || []),
                 details: JSON.stringify(stages),
                 posted_by: posted_by || 1
