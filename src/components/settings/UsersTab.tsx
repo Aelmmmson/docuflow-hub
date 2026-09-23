@@ -322,6 +322,32 @@ export function UsersTab() {
       return false;
     }
 
+    const parsedLimit = parseFloat(approvalLimit) || 0;
+    const isUnlimited = parsedLimit >= 900000000 || selectedRole.toLowerCase() === "md" || selectedRole.toLowerCase().includes("managing director");
+
+    if (isUnlimited) {
+      const selectedBranchObj = branches.find((b) => String(b.id) === selectedUserBranch);
+      const selectedEmpObj = apiEmployees.find(
+        (e) =>
+          e.id === selectedEmployee ||
+          (editingUser &&
+            ((e.employee_id && String(e.employee_id).toLowerCase() === String(editingUser.employee_id).toLowerCase()) ||
+              (e.work_email && editingUser.email && e.work_email.toLowerCase() === editingUser.email.toLowerCase())))
+      );
+      const bDesc = (selectedBranchObj?.description || selectedEmpObj?.branch || editingUser?.branch || "").toUpperCase();
+      const bId = String(selectedUserBranch || selectedBranchObj?.code || editingUser?.branch_id || "").trim();
+      const isHeadOffice = bDesc.includes("HEAD OFFICE") || bId === "000" || bId === "235";
+
+      if (!isHeadOffice) {
+        toast({
+          title: "Branch Restriction",
+          description: "The Unlimited Signing Limit can strictly only be assigned to an approver stationed at the HEAD OFFICE branch.",
+          variant: "destructive",
+        });
+        return false;
+      }
+    }
+
     return true;
   };
 
@@ -849,14 +875,37 @@ export function UsersTab() {
 
             if (!isApproverRole) return null;
 
+            const isUnlimitedChecked = parseFloat(approvalLimit) >= 900000000 || roleLower === "md" || roleLower.includes("managing director");
+
             return (
               <div className="space-y-2">
-                <Label htmlFor="approval-limit">Approval Signing Limit *</Label>
-                {roleLower === "md" || roleLower.includes("managing director") ? (
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="approval-limit">Approval Signing Limit *</Label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="unlimited-limit-check"
+                      checked={isUnlimitedChecked}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setApprovalLimit("999999999");
+                        } else {
+                          setApprovalLimit("0");
+                        }
+                      }}
+                      className="h-3.5 w-3.5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                    />
+                    <label htmlFor="unlimited-limit-check" className="text-xs text-muted-foreground font-medium cursor-pointer">
+                      Unlimited Limit (Head Office)
+                    </label>
+                  </div>
+                </div>
+
+                {isUnlimitedChecked ? (
                   <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-200 font-semibold flex items-center justify-between">
-                    <span>Managing Director (MD)</span>
+                    <span>Unlimited Signing Limit</span>
                     <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold">
-                      Unlimited Signing Limit
+                      Head Office Only
                     </Badge>
                   </div>
                 ) : (

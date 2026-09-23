@@ -79,16 +79,29 @@ const register = async (req, res) => {
 			});
 		});
 
-		// Single MD / Unlimited Limit check
+		// Single Unlimited Limit check & Head Office requirement
 		const limitNum = parseFloat(approval_limit) || 0;
-		if (limitNum >= 900000000 || String(role).toLowerCase() === "md" || String(role).toLowerCase().includes("managing director")) {
+		const isUnlimited = limitNum >= 900000000 || String(role).toLowerCase() === "md" || String(role).toLowerCase().includes("managing director");
+
+		if (isUnlimited) {
+			const targetBranchStr = String(branch || "").toUpperCase();
+			const targetBranchIdStr = String(branch_id || "").trim();
+			const isHeadOffice = targetBranchStr.includes("HEAD OFFICE") || targetBranchIdStr === "000" || targetBranchIdStr === "235";
+
+			if (!isHeadOffice) {
+				return res.status(400).json({
+					result: "The Unlimited Signing Limit can strictly only be assigned to an approver stationed at the HEAD OFFICE branch.",
+					code: "400"
+				});
+			}
+
 			const existingMd = await helper.selectRecordsWithQuery(
 				"SELECT u.id, u.first_name, u.last_name FROM users u JOIN model_has_roles mhr ON u.id = mhr.model_id JOIN roles r ON mhr.role_id = r.id WHERE u.approval_limit >= 900000000 OR LOWER(r.name) = 'md' OR LOWER(r.name) LIKE '%managing director%'"
 			);
 			if (existingMd.status === "success" && Array.isArray(existingMd.data) && existingMd.data.length > 0) {
 				const otherMd = existingMd.data[0];
 				return res.status(409).json({
-					result: `Only ONE user (the Managing Director) is permitted to have an Unlimited signing limit. Currently assigned to ${otherMd.first_name} ${otherMd.last_name}.`,
+					result: `Only ONE user in the system is permitted to have an Unlimited signing limit. Currently assigned to ${otherMd.first_name} ${otherMd.last_name}.`,
 					code: "409"
 				});
 			}
@@ -490,10 +503,23 @@ const updateUser = async(req,res) =>{
 		const result = helper.checkForNullOrEmpty(dataEntry);
 
 		if(result.status === "success"){
-			// Single MD / Unlimited Limit check
+			// Single Unlimited Limit check & Head Office requirement
 			const limitNum = parseFloat(approval_limit) || 0;
 			const targetUserId = Number(req.params.userId);
-			if (limitNum >= 900000000 || String(role).toLowerCase() === "md" || String(role).toLowerCase().includes("managing director")) {
+			const isUnlimited = limitNum >= 900000000 || String(role).toLowerCase() === "md" || String(role).toLowerCase().includes("managing director");
+
+			if (isUnlimited) {
+				const targetBranchStr = String(branch || "").toUpperCase();
+				const targetBranchIdStr = String(branch_id || "").trim();
+				const isHeadOffice = targetBranchStr.includes("HEAD OFFICE") || targetBranchIdStr === "000" || targetBranchIdStr === "235";
+
+				if (!isHeadOffice) {
+					return res.status(400).json({
+						result: "The Unlimited Signing Limit can strictly only be assigned to an approver stationed at the HEAD OFFICE branch.",
+						code: "400"
+					});
+				}
+
 				const existingMd = await helper.selectRecordsWithQuery(
 					"SELECT u.id, u.first_name, u.last_name FROM users u JOIN model_has_roles mhr ON u.id = mhr.model_id JOIN roles r ON mhr.role_id = r.id WHERE u.approval_limit >= 900000000 OR LOWER(r.name) = 'md' OR LOWER(r.name) LIKE '%managing director%'"
 				);
@@ -501,7 +527,7 @@ const updateUser = async(req,res) =>{
 					const otherMd = existingMd.data.find(u => Number(u.id) !== targetUserId);
 					if (otherMd) {
 						return res.status(409).json({
-							result: `Only ONE user (the Managing Director) is permitted to have an Unlimited signing limit. Currently assigned to ${otherMd.first_name} ${otherMd.last_name}.`,
+							result: `Only ONE user in the system is permitted to have an Unlimited signing limit. Currently assigned to ${otherMd.first_name} ${otherMd.last_name}.`,
 							code: "409"
 						});
 					}
