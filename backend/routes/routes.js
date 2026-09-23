@@ -47,6 +47,7 @@ router.delete("/remove-user-from-approvals/:userId", userController.removeUserFr
 router.put("/user/update-self-profile", userController.updateSelfProfile);
 router.put("/user/change-password", userController.changePassword);
 router.get("/user/is-approver/:userId", userController.checkIsApprover);
+router.get("/get-hr-employees", userController.getHrEmployees);
 
 
 

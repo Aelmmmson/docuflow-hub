@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { getErrorMessage } from "@/lib/utils";
+import { cn, getErrorMessage } from "@/lib/utils";
 import api from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -114,7 +114,7 @@ export function BranchLimitsTab() {
       <Alert className="border-blue-500/30 bg-blue-500/10 text-blue-900 dark:text-blue-200">
         <Building2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
         <div className="space-y-1">
-          <AlertTitle className="text-xs font-bold">Global Branch Approval Thresholds</AlertTitle>
+          <AlertTitle className="text-xs font-bold">Global Branch Approval Limits</AlertTitle>
           <AlertDescription className="text-xs">
             These limits determine when a document originated at a branch can be finalized locally vs when it must escalate to Head Office tiers. Changing a branch's limit applies globally across all document types.
           </AlertDescription>

@@ -77,11 +77,11 @@ const getParameters = async (req, res) => {
 		const doctypes = await helper.selectRecordsWithCondition(documentTypesCollection, [{ code_id: "2" }]);
 		let branches = [];
 
-		// Always fetch live branches from Swagger HR API
+		// Strictly fetch live branches from Swagger HR API with NO FALLBACKS
 		try {
 			const hrBranchRes = await axios.get("http://10.203.14.114:3099/v1/api/hr/me/branches", {
 				headers: { "x-api-key": process.env.HR_MOBILE_API_KEY || "81780c52fe24634d0ab7164a6e7a74c908da568a906111db" },
-				timeout: 4000
+				timeout: 5000
 			});
 
 			if (hrBranchRes.data?.data?.branches && Array.isArray(hrBranchRes.data.data.branches)) {
@@ -93,13 +93,20 @@ const getParameters = async (req, res) => {
 				}));
 			}
 		} catch (hrErr) {
-			console.warn("Live HR branch API fetch failed, falling back to DB records:", hrErr.message);
+			console.error("Live HR branch API fetch failed:", hrErr.message);
+			return res.status(503).json({
+				result: "HR API Service is currently unavailable. Please try again later.",
+				code: "503",
+				error: "HR_API_UNAVAILABLE"
+			});
 		}
 
-		// Fallback to database branches if live API returned empty
 		if (!branches || branches.length === 0) {
-			const branchesRes = await helper.selectRecordsWithCondition(documentTypesCollection, [{ code_id: "1" }]);
-			branches = (branchesRes && branchesRes.status === "success" && branchesRes.data) ? branchesRes.data : [];
+			return res.status(503).json({
+				result: "HR API Service returned no branch data. Please try again later.",
+				code: "503",
+				error: "HR_API_EMPTY"
+			});
 		}
 
 		const users = await helper.selectRecordsWithQuery('select * from users');

@@ -122,8 +122,8 @@ export function UsersTab() {
   const { data: apiEmployees = [], isLoading: isLoadingEmployees } = useQuery({
     queryKey: ["employees"],
     queryFn: async () => {
-      const res = await axios.get<ApiEmployee[]>("http://10.203.14.169/hr/api/employees_rest.php");
-      return res.data;
+      const res = await api.get<{ employees: ApiEmployee[] }>("/get-hr-employees");
+      return res.data.employees || [];
     },
     staleTime: 10 * 60 * 1000, // 10 minutes cache
   });
@@ -375,8 +375,6 @@ export function UsersTab() {
       employee_id: emp?.employee_id || editingUser?.employee_id || "",
       phone: phone || emp?.mobile_phone || editingUser?.phone || "0240000000",
       role: selectedRole,
-      branch: selectedBranchObj?.description || editingUser?.branch || "",
-      branch_id: selectedUserBranch || editingUser?.branch_id || "",
       status: selectedStatus === "Active" ? "1" : "0",
       approval_limit: parsedLimit,
       posted_by: currentUser?.user_id || 1,
@@ -391,8 +389,6 @@ export function UsersTab() {
           last_name: editingUser.last_name,
           posted_by: currentUser?.user_id || 1,
           role: selectedRole,
-          branch: payload.branch,
-          branch_id: payload.branch_id,
           status: payload.status,
           phone: payload.phone,
           approval_limit: parsedLimit,
@@ -1206,7 +1202,7 @@ export function UsersTab() {
           <div className="space-y-3 py-2">
             <div className="p-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-xs space-y-2">
               <p className="font-semibold text-amber-900 dark:text-amber-200">
-                The user will be automatically removed from the following setups (stage quorum will remain satisfied):
+                The user will be automatically removed from the following setups (workflow requirements will remain satisfied):
               </p>
 
               <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
@@ -1219,7 +1215,7 @@ export function UsersTab() {
                       </span>
                     </div>
                     <span className="text-[10px] px-2 py-0.5 rounded font-semibold bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200">
-                      Quorum Safe
+                      Safe to Remove
                     </span>
                   </div>
                 ))}

@@ -113,8 +113,8 @@ export function ApprovalSetupTab() {
       approvers: [],
       mandatoryApprovers: [],
       scope: idx === 0 ? "BRANCH" : "HEAD_OFFICE",
-      isRequired: idx === 0, // default Stage 1 as required
-      thresholdAmount: 0,
+      isRequired: true,
+      thresholdAmount: count > 1 && idx === count - 1 ? 999999999 : 0,
     }));
     setStages(newStages);
   };
@@ -159,14 +159,14 @@ export function ApprovalSetupTab() {
 
     const transformedStages: ApprovalStage[] = parsedDetails.map((detail, idx) => ({
       name: detail.name || "",
-      quorum: Number(detail.quorum) || 1,
+      quorum: 1,
       approvers: detail.approvers?.map((a) => a.name) ?? [],
       mandatoryApprovers: detail.approvers
         ?.filter((a) => a.isMandatory)
         .map((a) => a.name) ?? [],
       scope: detail.scope || (idx === 0 ? "BRANCH" : "HEAD_OFFICE"),
-      isRequired: detail.isRequired !== undefined ? Boolean(detail.isRequired) : detail.is_required !== undefined ? Boolean(detail.is_required) : (idx === 0),
-      thresholdAmount: Number(detail.thresholdAmount || detail.threshold_amount) || (idx + 1) * 10000,
+      isRequired: true,
+      thresholdAmount: (parsedDetails.length > 1 && idx === parsedDetails.length - 1) ? 999999999 : (Number(detail.thresholdAmount || detail.threshold_amount) || (idx + 1) * 10000),
     }));
 
     setStages(transformedStages);
@@ -232,7 +232,7 @@ export function ApprovalSetupTab() {
         name: stage.name,
         scope: idx === 0 ? "BRANCH" : "HEAD_OFFICE",
         isRequired: true,
-        threshold_amount: Number(stage.thresholdAmount) || 0,
+        threshold_amount: (numberOfStages > 1 && idx === numberOfStages - 1) ? 999999999 : (Number(stage.thresholdAmount) || 0),
         approvers: [],
       })),
     };
@@ -265,42 +265,6 @@ export function ApprovalSetupTab() {
     setStages((prev) =>
       prev.map((stage, i) => (i === index ? { ...stage, ...updates } : stage))
     );
-  };
-
-  const toggleApprover = (stageIndex: number, approverName: string) => {
-    const stage = stages[stageIndex];
-    const isSelected = stage.approvers.includes(approverName);
-
-    if (isSelected) {
-      updateStage(stageIndex, {
-        approvers: stage.approvers.filter((a) => a !== approverName),
-        mandatoryApprovers: stage.mandatoryApprovers.filter((a) => a !== approverName),
-      });
-    } else {
-      updateStage(stageIndex, {
-        approvers: [...stage.approvers, approverName],
-      });
-    }
-  };
-
-  const toggleMandatory = (stageIndex: number, approverName: string) => {
-    const stage = stages[stageIndex];
-    const isMandatory = stage.mandatoryApprovers.includes(approverName);
-
-    if (!isMandatory && stage.mandatoryApprovers.length >= stage.quorum) {
-      toast({
-        title: "Cannot Add Mandatory Approver",
-        description: `Mandatory approvers cannot exceed quorum (${stage.quorum}).`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    updateStage(stageIndex, {
-      mandatoryApprovers: isMandatory
-        ? stage.mandatoryApprovers.filter((a) => a !== approverName)
-        : [...stage.mandatoryApprovers, approverName],
-    });
   };
 
   // Fetch available document types
@@ -392,13 +356,27 @@ export function ApprovalSetupTab() {
     },
     {
       key: "approversCount",
-      header: "Approvers",
-      render: (setup) => <span className="text-xs">{setup.number_of_approvers}</span>,
+      header: "Total Approvers",
+      render: (setup) => {
+        const count = setup.number_of_approvers > 0 ? setup.number_of_approvers : availableApprovers.length;
+        return <span className="text-xs font-semibold">{count}</span>;
+      },
     },
     {
       key: "requiredApproversCount",
-      header: "Required",
-      render: (setup) => <span className="text-xs">{setup.mandatory_approvers}</span>,
+      header: "Required Approvers",
+      render: (setup) => {
+        let detailsCount = setup.approval_stages || 1;
+        try {
+          if (typeof setup.details === "string") {
+            const parsed = JSON.parse(setup.details);
+            if (Array.isArray(parsed)) detailsCount = parsed.length;
+          } else if (Array.isArray(setup.details)) {
+            detailsCount = setup.details.length;
+          }
+        } catch (_) {}
+        return <span className="text-xs font-semibold">{detailsCount}</span>;
+      },
     },
     {
       key: "actions",
@@ -529,8 +507,8 @@ export function ApprovalSetupTab() {
                               approvers: [],
                               mandatoryApprovers: [],
                               scope: "HEAD_OFFICE" as const,
-                              isRequired: false,
-                              thresholdAmount: 0,
+                              isRequired: true,
+                              thresholdAmount: (val > 1 && idx + prevStages.length === val - 1) ? 999999999 : 0,
                             }));
                             return [...prevStages, ...newStages];
                           } else if (val < prevStages.length) {
@@ -564,66 +542,105 @@ export function ApprovalSetupTab() {
           )}
 
           {/* Stage Configuration Steps */}
-          {currentStep > 0 && stages[currentStep - 1] && (
-            <div className="space-y-4 animate-fade-in">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                  {currentStep}
+          {currentStep > 0 && stages[currentStep - 1] && (() => {
+            const stageIdx = currentStep - 1;
+            const stage = stages[stageIdx];
+            const isLastStage = numberOfStages > 1 && currentStep === numberOfStages;
+            const isSingleStage = numberOfStages === 1;
+
+            if (isLastStage && stage.thresholdAmount !== 999999999) {
+              updateStage(stageIdx, { thresholdAmount: 999999999 });
+            }
+
+            return (
+              <div className="space-y-4 animate-fade-in">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
+                    {currentStep}
+                  </div>
+                  <span className="text-sm font-medium">Stage {currentStep}</span>
+                  {isLastStage && (
+                    <Badge variant="secondary" className="text-[10px] ml-auto font-semibold bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 border-amber-300">
+                      Final Stage (MD / Unlimited)
+                    </Badge>
+                  )}
                 </div>
-                <span className="text-sm font-medium">Stage {currentStep}</span>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="stageName" className="text-xs font-medium">
-                  Stage Name <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="stageName"
-                  value={stages[currentStep - 1].name}
-                  onChange={(e) => updateStage(currentStep - 1, { name: e.target.value })}
-                  placeholder={currentStep === 1 ? "e.g., Branch Operations Review" : `e.g., Head Office Tier ${currentStep - 1} Approval`}
-                  className="h-9 font-medium"
-                />
-              </div>
-
-              {/* Stage Approval Limit */}
-              <div className="space-y-1.5">
-                <Label htmlFor="thresholdAmount" className="text-xs font-medium">
-                  Stage Approval Limit ({currentStep === 1 ? "Branch Limit" : "Head Office Exact Limit"})
-                </Label>
-                <Input
-                  id="thresholdAmount"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={stages[currentStep - 1].thresholdAmount || ""}
-                  onChange={(e) => updateStage(currentStep - 1, { thresholdAmount: parseFloat(e.target.value) || 0 })}
-                  placeholder={currentStep === 1 ? "e.g., 50000 (0 for default)" : "e.g., 400000 (Exact Head Office Approver Limit)"}
-                  className="h-9 font-medium text-xs"
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  {currentStep === 1
-                    ? "Branch limit for Stage 1 sign-off. Higher doc amounts bypass lower branch approvers directly to top branch approver."
-                    : `Exact personal signing limit for the Head Office approver assigned to Stage ${currentStep}.`}
-                </p>
-              </div>
-
-              {/* Mandatory Stage Card (All stages mandatory) */}
-              <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-foreground">Mandatory Stage</span>
-                  <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30 font-semibold">
-                    Compulsory
-                  </Badge>
+                <div className="space-y-2">
+                  <Label htmlFor="stageName" className="text-xs font-medium">
+                    Stage Name <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="stageName"
+                    value={stage.name}
+                    onChange={(e) => updateStage(stageIdx, { name: e.target.value })}
+                    placeholder={
+                      currentStep === 1
+                        ? "e.g., Branch Operations Review"
+                        : isLastStage
+                        ? "e.g., Managing Director Final Approval"
+                        : `e.g., Head Office Tier ${currentStep - 1} Approval`
+                    }
+                    className="h-9 font-medium"
+                  />
                 </div>
-                <p className="text-[11px] text-muted-foreground">
-                  {currentStep === 1
-                    ? "Stage 1 is compulsory for all documents originating from the branch."
-                    : `Stage ${currentStep} is mandatory for documents escalating to Head Office.`}
-                </p>
+
+                {/* Stage Approval Limit */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="thresholdAmount" className="text-xs font-medium">
+                    Stage Approval Limit ({currentStep === 1 ? "Branch Limit" : isLastStage ? "Unlimited (MD)" : "Head Office Exact Limit"})
+                  </Label>
+                  <Input
+                    id="thresholdAmount"
+                    type={isLastStage ? "text" : "number"}
+                    step="0.01"
+                    min="0"
+                    disabled={isLastStage}
+                    value={isLastStage ? "Unlimited (MD)" : (stage.thresholdAmount || "")}
+                    onChange={(e) => updateStage(stageIdx, { thresholdAmount: parseFloat(e.target.value) || 0 })}
+                    placeholder={currentStep === 1 ? "e.g., 50000 (0 for default)" : "e.g., 400000 (Exact Head Office Approver Limit)"}
+                    className="h-9 font-medium text-xs disabled:bg-muted/80 disabled:cursor-not-allowed text-foreground"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    {currentStep === 1
+                      ? "Branch limit for Stage 1 sign-off. Documents exceeding branch limits escalate to higher branch limits or Managing Director."
+                      : isLastStage
+                      ? "Reserved for situations where the document reaches the Managing Director (MD) with Unlimited signing limit."
+                      : `Exact personal signing limit for the Head Office approver assigned to Stage ${currentStep}.`}
+                  </p>
+                </div>
+
+                {/* Informational Alert Notice */}
+                {isLastStage ? (
+                  <Alert className="border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200 py-2.5">
+                    <AlertDescription className="text-[11px]">
+                      <strong>Last Stage Reserved for MD:</strong> Since this is the final stage of this workflow, it is automatically set to an <strong>Unlimited Stage Approval Limit</strong> reserved for Managing Director (MD) sign-off.
+                    </AlertDescription>
+                  </Alert>
+                ) : isSingleStage ? (
+                  <Alert className="border-blue-500/30 bg-blue-500/10 text-blue-900 dark:text-blue-200 py-2.5">
+                    <AlertDescription className="text-[11px]">
+                      <strong>1-Stage Workflow:</strong> Stage 1 handles branch approval. If a document amount exceeds the branch manager's limit, it will automatically escalate to the Managing Director (MD) for final approval/rejection.
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-foreground">Mandatory Stage</span>
+                      <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30 font-semibold">
+                        Compulsory
+                      </Badge>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      {currentStep === 1
+                        ? "Stage 1 is compulsory for all documents originating from the branch."
+                        : `Stage ${currentStep} is mandatory for documents escalating to Head Office.`}
+                    </p>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Progress Dots */}
           <div className="flex justify-center gap-2 py-4">
@@ -675,98 +692,118 @@ export function ApprovalSetupTab() {
       >
         {viewingSetup && (
           <div className="space-y-4">
-            <div className="rounded-lg bg-muted/50 p-4 space-y-3">
-              <div className="flex justify-between">
-                <span className="text-xs text-muted-foreground">ID</span>
-                <span className="text-xs font-medium">{viewingSetup.id}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-xs text-muted-foreground">Document Type</span>
-                <span className="text-xs font-medium capitalize">{viewingSetup.description}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-xs text-muted-foreground">Total Approvers</span>
-                <span className="text-xs font-medium">{viewingSetup.number_of_approvers}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-xs text-muted-foreground">Required Approvers</span>
-                <span className="text-xs font-medium">{viewingSetup.mandatory_approvers}</span>
-              </div>
-            </div>
+            {(() => {
+              let detailsArray: Array<{
+                name: string;
+                scope?: string;
+                isRequired?: boolean;
+                is_required?: boolean;
+                thresholdAmount?: number;
+                threshold_amount?: number;
+                approvers?: Array<{ userId: number; name: string; isMandatory: boolean }>;
+              }> = [];
 
-            <div className="space-y-3">
-              <Label className="text-xs font-medium">Approval Stages</Label>
-
-              {(() => {
-                let detailsArray: Array<{
-                  name: string;
-                  quorum: string;
-                  scope?: string;
-                  isRequired?: boolean;
-                  is_required?: boolean;
-                  thresholdAmount?: number;
-                  threshold_amount?: number;
-                  approvers: Array<{ userId: number; name: string; isMandatory: boolean }>;
-                }> = [];
-
-                try {
-                  if (typeof viewingSetup.details === "string") {
-                    detailsArray = JSON.parse(viewingSetup.details);
-                  } else if (Array.isArray(viewingSetup.details)) {
-                    detailsArray = viewingSetup.details;
-                  }
-                } catch (parseErr) {
-                  console.error("Error parsing details for view:", parseErr);
+              try {
+                if (typeof viewingSetup.details === "string") {
+                  detailsArray = JSON.parse(viewingSetup.details);
+                } else if (Array.isArray(viewingSetup.details)) {
+                  detailsArray = viewingSetup.details;
                 }
+              } catch (parseErr) {
+                console.error("Error parsing details for view:", parseErr);
+              }
 
-                return detailsArray.map((stage, index) => {
-                  const isReq = stage.isRequired || stage.is_required;
-                  const scp = stage.scope || (index === 0 ? "BRANCH" : "HEAD_OFFICE");
-                  const thresh = stage.thresholdAmount || stage.threshold_amount;
+              const totalAppr = viewingSetup.number_of_approvers > 0 ? viewingSetup.number_of_approvers : availableApprovers.length;
+              const reqAppr = detailsArray.length || viewingSetup.approval_stages || 1;
 
-                  return (
-                    <div key={index} className="rounded-lg border border-border p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
-                            {index + 1}
-                          </div>
-                          <span className="text-xs font-semibold">{stage.name}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Badge variant="outline" className="text-[10px] font-mono">
-                            {scp}
-                          </Badge>
-                          {isReq && (
-                            <Badge variant="destructive" className="text-[10px]">
-                              Mandatory
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      <div className="pl-8 space-y-1">
-                        <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-mono">
-                          <span>Quorum: {stage.quorum}</span>
-                          {thresh !== undefined && <span>Threshold: GHS {Number(thresh).toLocaleString()}</span>}
-                        </div>
-                        <div className="flex flex-wrap gap-1 pt-1">
-                          {stage.approvers.map((approver) => (
-                            <Badge
-                              key={approver.userId}
-                              variant={approver.isMandatory ? "default" : "secondary"}
-                              className="text-[10px] capitalize"
-                            >
-                              {approver.name}
-                              {approver.isMandatory && " *"}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
+              return (
+                <>
+                  <div className="rounded-lg bg-muted/50 p-4 space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-xs text-muted-foreground">ID</span>
+                      <span className="text-xs font-medium">{viewingSetup.id}</span>
                     </div>
-                  );
-                });
-              })()}
-            </div>
+                    <div className="flex justify-between">
+                      <span className="text-xs text-muted-foreground">Document Type</span>
+                      <span className="text-xs font-medium capitalize">{viewingSetup.description}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-xs text-muted-foreground">Origination Branch</span>
+                      <span className="text-xs font-semibold text-primary">Document's Branch (Dynamic)</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-xs text-muted-foreground">Total Approvers</span>
+                      <span className="text-xs font-medium">{totalAppr}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-xs text-muted-foreground">Required Approvers</span>
+                      <span className="text-xs font-medium">{reqAppr}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label className="text-xs font-medium">Approval Stages</Label>
+
+                    {detailsArray.map((stage, index) => {
+                      const scp = stage.scope || (index === 0 ? "BRANCH" : "HEAD_OFFICE");
+                      const thresh = Number(stage.thresholdAmount || stage.threshold_amount || 0);
+                      const isLast = (index === detailsArray.length - 1 && detailsArray.length > 1) || thresh >= 999999999;
+
+                      return (
+                        <div key={index} className="rounded-lg border border-border p-3.5 space-y-2.5 bg-card">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+                                {index + 1}
+                              </div>
+                              <span className="text-xs font-semibold">{stage.name}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Badge variant="outline" className="text-[10px] font-mono">
+                                {scp}
+                              </Badge>
+                              <Badge variant="destructive" className="text-[10px]">
+                                Mandatory
+                              </Badge>
+                            </div>
+                          </div>
+
+                          <div className="pl-8 space-y-1.5">
+                            <div className="text-[11px] font-medium text-foreground">
+                              <span>
+                                Stage Approval Limit:{" "}
+                                <strong className="text-primary font-bold">
+                                  {isLast ? "Unlimited (MD)" : `GHS ${thresh.toLocaleString()}`}
+                                </strong>
+                              </span>
+                            </div>
+
+                            <div className="pt-1 text-[11px] text-muted-foreground">
+                              {index === 0 ? (
+                                <div className="p-2 rounded bg-muted/40 border border-border/50 text-[10px] space-y-0.5">
+                                  <span className="font-semibold block text-foreground">Branch Stage Approver:</span>
+                                  <p>Assigned dynamically to active approver(s) at document's originating branch.</p>
+                                </div>
+                              ) : isLast ? (
+                                <div className="p-2 rounded bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-[10px] space-y-0.5 text-amber-900 dark:text-amber-200">
+                                  <span className="font-bold block">Managing Director (MD) Approver:</span>
+                                  <p>Reserved for Head Office Managing Director with Unlimited signing limit.</p>
+                                </div>
+                              ) : (
+                                <div className="p-2 rounded bg-muted/40 border border-border/50 text-[10px] space-y-0.5">
+                                  <span className="font-semibold block text-foreground">Head Office Approver:</span>
+                                  <p>Assigned to Head Office approver(s) with exact limit matching GHS {thresh.toLocaleString()}.</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
       </RightAside>

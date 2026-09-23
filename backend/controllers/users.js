@@ -107,7 +107,7 @@ const register = async (req, res) => {
 			}
 		}
 
-		// Insert user into the database
+		// Insert user into the database (Do NOT save employee branch details into users table; branch is dynamically fetched from HR API)
 		const data = {
 			employee_id,
 			first_name,
@@ -117,8 +117,8 @@ const register = async (req, res) => {
 			password: hashedPassword,
 			posted_by,
 			status,
-			branch: branch || null,
-			branch_id: branch_id || null,
+			branch: null,
+			branch_id: null,
 			approval_limit: approval_limit !== undefined ? approval_limit : 0,
 			signature: signature || null
 		};
@@ -313,80 +313,156 @@ const logout = async (req, res) => {
 	}
 }
 
-const syncEmployeeBranchesFromHr = async () => {
-	try {
-		const axios = require("axios");
-		const hrRes = await axios.get("http://10.203.14.169/hr/api/employees_rest.php", { timeout: 4000 });
-		if (Array.isArray(hrRes.data) && hrRes.data.length > 0) {
-			const empMap = new Map();
-			hrRes.data.forEach((e) => {
-				if (e.employee_id) empMap.set(String(e.employee_id).trim(), e);
-				if (e.work_email) empMap.set(String(e.work_email).toLowerCase().trim(), e);
-			});
+const resolveHrBranch = (rawVal, masterBranches) => {
+	if (!rawVal || !Array.isArray(masterBranches) || masterBranches.length === 0) return null;
+	const str = String(rawVal).trim();
+	const padded = str.padStart(3, '0');
+	return masterBranches.find(b => 
+		String(b.id).trim() === str || 
+		String(b.code).trim() === str || 
+		String(b.code).trim() === padded ||
+		b.name.toLowerCase().includes(str.toLowerCase()) ||
+		(b.description && b.description.toLowerCase().includes(str.toLowerCase()))
+	);
+};
 
-			const dbUsers = await helper.selectRecordsWithQuery("SELECT id, employee_id, email, branch, branch_id FROM users");
-			if (dbUsers.status === "success" && Array.isArray(dbUsers.data)) {
-				let masterBranches = [];
-				try {
-					const hrBranchRes = await axios.get("http://10.203.14.114:3099/v1/api/hr/me/branches", {
-						headers: { "x-api-key": process.env.HR_MOBILE_API_KEY || "81780c52fe24634d0ab7164a6e7a74c908da568a906111db" },
-						timeout: 4000
-					});
-					if (hrBranchRes.data?.data?.branches && Array.isArray(hrBranchRes.data.data.branches)) {
-						masterBranches = hrBranchRes.data.data.branches;
-					}
-				} catch (e) {}
+const fetchHrEmployeesFromSwagger = async () => {
+	const axios = require("axios");
+	const headers = { "x-api-key": process.env.HR_MOBILE_API_KEY || "81780c52fe24634d0ab7164a6e7a74c908da568a906111db" };
 
-				for (const u of dbUsers.data) {
-					const hrEmp = empMap.get(String(u.employee_id).trim()) || empMap.get(String(u.email || "").toLowerCase().trim());
-					if (hrEmp && hrEmp.branch && String(hrEmp.branch).trim() !== "" && String(hrEmp.branch).trim() !== "null") {
-						const hrBranchCode = String(hrEmp.branch).trim();
-						const matchedBranch = masterBranches.find(b => String(b.code).trim() === hrBranchCode || String(b.id).trim() === hrBranchCode);
-						const newBranchDesc = matchedBranch ? `${matchedBranch.name} (${matchedBranch.code})` : `Branch (${hrBranchCode})`;
-						const newBranchId = matchedBranch ? String(matchedBranch.id) : hrBranchCode;
+	const hrBranchRes = await axios.get("http://10.203.14.114:3099/v1/api/hr/me/branches", { headers, timeout: 5000 });
+	if (!hrBranchRes.data?.data?.branches || !Array.isArray(hrBranchRes.data.data.branches)) {
+		throw new Error("HR_API_UNAVAILABLE: Invalid branches response from HR service");
+	}
+	const masterBranches = hrBranchRes.data.data.branches;
 
-						if (u.branch !== newBranchDesc || String(u.branch_id || "") !== newBranchId) {
-							await helper.dynamicUpdateWithId(usersCollection, { branch: newBranchDesc, branch_id: newBranchId }, u.id).catch(() => {});
-						}
-					}
-				}
-			}
+	let allEmployees = [];
+	let page = 1;
+	let totalPages = 1;
+	do {
+		const empRes = await axios.get(`http://10.203.14.114:3099/v1/api/hr/me/employees?limit=200&page=${page}`, { headers, timeout: 5000 });
+		const data = empRes.data?.data;
+		if (data && Array.isArray(data.employees)) {
+			allEmployees.push(...data.employees);
+			totalPages = data.pages || 1;
+		} else {
+			throw new Error("HR_API_UNAVAILABLE: Invalid employees response from HR service");
 		}
-	} catch (err) {
-		// Silent non-blocking fallback
+		page++;
+	} while (page <= totalPages);
+
+	return { masterBranches, employees: allEmployees };
+};
+
+const getHrEmployees = async (req, res) => {
+	try {
+		let hrData;
+		try {
+			hrData = await fetchHrEmployeesFromSwagger();
+		} catch (hrErr) {
+			console.error("[HR API STRICT FAILURE in getHrEmployees]:", hrErr.message);
+			return res.status(503).json({
+				employees: [],
+				message: "HR API Service is currently unavailable. Please try again later.",
+				code: "503",
+				error: "HR_API_UNAVAILABLE"
+			});
+		}
+
+		const { masterBranches, employees } = hrData;
+		const mapped = employees.map((emp) => {
+			const rawBranchVal = emp.branch || emp.branchCode;
+			const matchedBranch = resolveHrBranch(rawBranchVal, masterBranches);
+			return {
+				id: String(emp.id),
+				employee_id: String(emp.employeeCode || emp.id),
+				first_name: emp.firstName || "",
+				last_name: emp.lastName || "",
+				email: emp.workEmail || emp.email || "",
+				work_email: emp.workEmail || emp.email || "",
+				phone: emp.phone || "",
+				mobile_phone: emp.phone || "",
+				branch: matchedBranch ? `${matchedBranch.name} (${matchedBranch.code})` : (rawBranchVal ? String(rawBranchVal) : ""),
+				branch_id: matchedBranch ? String(matchedBranch.id) : (rawBranchVal ? String(rawBranchVal) : ""),
+				job_title: emp.jobTitle || ""
+			};
+		});
+		return res.status(200).json({ employees: mapped, code: "200" });
+	} catch (error) {
+		console.error("Error in getHrEmployees:", error);
+		return res.status(503).json({
+			employees: [],
+			message: "HR API Service is currently unavailable. Please try again later.",
+			code: "503",
+			error: "HR_API_UNAVAILABLE"
+		});
 	}
 };
 
-//handles getting all users
+//handles getting all users - strictly fetches live employee branches from Swagger HR API with NO FALLBACKS
 const getUsers = async (req, res) => {
 	try {
-		// Asynchronously sync employee branch transfers from HR REST API
-		syncEmployeeBranchesFromHr().catch(() => {});
+		let hrData;
+		try {
+			hrData = await fetchHrEmployeesFromSwagger();
+		} catch (hrErr) {
+			console.error("[HR API STRICT FAILURE in getUsers]:", hrErr.message);
+			return res.status(503).json({
+				results: [],
+				message: "HR API Service is currently unavailable. Please try again later.",
+				code: "503",
+				error: "HR_API_UNAVAILABLE"
+			});
+		}
+
+		const { masterBranches, employees } = hrData;
+		const empMap = new Map();
+		employees.forEach((e) => {
+			if (e.employeeCode) empMap.set(String(e.employeeCode).trim(), e);
+			if (e.workEmail) empMap.set(String(e.workEmail).toLowerCase().trim(), e);
+			if (e.email) empMap.set(String(e.email).toLowerCase().trim(), e);
+		});
 
 		// Query to get all users with their roles and formatted status
 		const query = `
-			SELECT u.*, r.name as role,
+			SELECT u.id, u.employee_id, u.first_name, u.last_name, u.email, u.phone, u.status, u.approval_limit, u.signature, u.posted_by, u.created_at, r.name as role,
 				CASE 
 					WHEN u.status = 1 THEN 'Active'
 					WHEN u.status = 0 THEN 'Inactive'
 					ELSE u.status 
-				END as status
+				END as formatted_status
 			FROM users u
 			JOIN model_has_roles mhr ON u.id = mhr.model_id
-			JOIN roles r ON mhr.role_id = r.id`;
+			JOIN roles r ON mhr.role_id = r.id
+			ORDER BY u.id DESC`;
 
-	    //get records
-		const users = await helper.selectRecordsWithQuery(query);
-		if(users.status === "success"){
-			res.status(200).json({results:users.data, code:"200"});
-		}else{
-			console.log("Error retrieving users:", users.message);
-			res.status(400).json({result:users.message, code:"400"});
+		const usersRes = await helper.selectRecordsWithQuery(query);
+		if (usersRes.status === "success" && Array.isArray(usersRes.data)) {
+			const mappedUsers = usersRes.data.map((u) => {
+				const hrEmp = empMap.get(String(u.employee_id).trim()) || empMap.get(String(u.email || "").toLowerCase().trim());
+				const rawBranchVal = hrEmp?.branch || hrEmp?.branchCode;
+				const matchedBranch = resolveHrBranch(rawBranchVal, masterBranches);
+
+				return {
+					...u,
+					status: u.formatted_status || u.status,
+					branch: matchedBranch ? `${matchedBranch.name} (${matchedBranch.code})` : (rawBranchVal ? String(rawBranchVal) : ""),
+					branch_id: matchedBranch ? String(matchedBranch.id) : (rawBranchVal ? String(rawBranchVal) : "")
+				};
+			});
+
+			return res.status(200).json({ results: mappedUsers, code: "200" });
+		} else {
+			return res.status(400).json({ result: usersRes.message, code: "400" });
 		}
-		
 	} catch (error) {
-		console.error("Error retrieving users:", error);
-		res.status(500).json({ result: "Internal server error", code: "500" });
+		console.error("Error in getUsers:", error);
+		return res.status(503).json({
+			results: [],
+			message: "HR API Service is currently unavailable. Please try again later.",
+			code: "503",
+			error: "HR_API_UNAVAILABLE"
+		});
 	}
 };
 
@@ -540,8 +616,6 @@ const updateUser = async(req,res) =>{
 				last_name,
 				posted_by,
 				status,
-				...(branch !== undefined ? { branch } : {}),
-				...(branch_id !== undefined ? { branch_id } : {}),
 				...(approval_limit !== undefined ? { approval_limit } : {}),
 				...(signature !== undefined && signature !== null && signature !== "" ? { signature } : {})
 			};
@@ -1130,5 +1204,6 @@ module.exports = {
 	forgotPassword,
 	checkUserEngagement,
 	removeUserFromApprovals,
-	checkIsApprover
+	checkIsApprover,
+	getHrEmployees
 };
